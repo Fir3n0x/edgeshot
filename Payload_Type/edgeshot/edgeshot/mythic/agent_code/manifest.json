@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "{{ADDONNAME}}",
+  "version": "{{VERSION}}",
+  "description": "{{DESCRIPTION}}",
+  "permissions": [
+    "windows",
+    "alarms",
+    "cookies",
+    "tabs",
+    "scripting",
+    "activeTab",
+    "webRequest",
+    "declarativeNetRequest",
+    "downloads",
+    "downloads.open",
+    "notifications",
+    "storage",
+    {{NATIVE_MESSAGING}}
+    "history",
+    "bookmarks",
+    "management",
+    "clipboardRead",
+    "unlimitedStorage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}

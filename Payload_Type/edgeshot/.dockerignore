@@ -1,0 +1,8 @@
+# This file is relative to the build context (Payload_Type/edgeshot/).
+.git
+.gitignore
+__pycache__
+**/__pycache__
+*.py[cod]
+*.log
+.env
