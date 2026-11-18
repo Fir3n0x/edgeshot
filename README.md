@@ -157,13 +157,21 @@ build will also refuse `Perform Key Exchange = true` with a clear error.
 | `browser_target` | ChooseOne | `chrome` | stomp, gap | `chrome` / `edge` / `brave` / `vivaldi` |
 | `spoof_id` | String | *(empty)* | stomp, gap | Extension ID to spoof (empty = random ID) |
 | `secure_preferences` | File | — | stomp, gap | Target's `Secure Preferences` file to forge |
+| `extension_icon` | File | *(none)* | all | Custom extension icon (PNG/JPEG), resized to 16/48/128 (empty = default EdgeShot logo) |
 | `device_id` | String | *(empty)* | stomp, gap | Windows SID or macOS/Linux machine ID |
-| `target_dir` | String | *(empty)* | stomp, gap | Deployment root (empty = platform default) |
+| `target_dir` | String | *(empty)* | stomp, gap | Deployment root. Empty = platform default: Windows `C:\ProgramData\EdgeShot`, macOS/Linux `/tmp/.edgeshot` |
 | `enable_rce` | Boolean | `false` | all | Bundle the Native Messaging RCE source |
 
 > **Target OS** is selected in Mythic's own *"Select Target OS"* step, not as a
 > build parameter. It maps to the platform (`windows` / `darwin` / `linux`) used
 > for deployment paths and the injection script.
+>
+> **Default OS note:** the *"Select Target OS"* step defaults to the first OS in
+> an alphabetical list, which is `Linux` — this is hard-coded in Mythic's
+> frontend (`Step1SelectOS.js` sorts the OS list), not something an agent can
+> override. The operator must explicitly select **Windows** (or macOS) on that
+> step; the choice is then respected everywhere (paths, inject script, HMAC seed
+> lookup).
 
 ## Deployment modes
 
@@ -324,7 +332,9 @@ or create a personal access token with `write:packages` and store it as a
 | `stomp`/`gap` build fails on `device_id` | Provide the victim's Windows SID or macOS/Linux machine ID. |
 | `stomp`/`gap` HMAC never validates (Edge/Brave/Vivaldi) | Populate the missing seed in `browser_config.py`. |
 | `check_rce` reports `rce_active: false` | Host not installed, or browser not restarted since install. |
-| "No exit command selected, continue?" prompt | `exit` is built-in; ensure the payload was rebuilt with the current agent. |
+| "No exit command selected, continue?" prompt | Fixed in this agent: `exit` declares `supported_ui_features = ["callback_table:exit"]`. If you still see it, rebuild the payload with the current agent. |
+| Extension fails to load: *"Service worker registration failed. Status code: 15"* / *"Uncaught SyntaxError: Unexpected string"* | The service worker failed to parse. Rebuild with the current agent (the obfuscator no longer rewrites object-literal keys into invalid `_x("…")` property syntax). |
+| Extension icon missing / blank in the browser | The manifest now declares `icons` (16/48/128). Rebuild; supply a custom `extension_icon` (PNG/JPEG) if you want your own art. |
 
 ## Repository structure
 

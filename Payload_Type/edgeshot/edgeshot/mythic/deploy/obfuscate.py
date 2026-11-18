@@ -184,8 +184,31 @@ def obfuscate_js(js_code, key=XOR_KEY):
                     break
                 raw_chars.append(ch)
                 j += 1
-            value = _js_unescape("".join(raw_chars))
-            out.append('_x("' + _encode(value, key) + '")')
+
+            # A string literal immediately followed by ':' is a property KEY
+            # ({"host": handler}), a switch case label (case "x":) or a ternary
+            # branch (cond ? "a" : "b"). Rewriting an object KEY into `_x("...")`
+            # is invalid property syntax (V8: "Unexpected string"), so leave such
+            # literals untouched. Obfuscating keys buys nothing anyway — they are
+            # structural, not secret string *values*.
+            k = j
+            while k < n:
+                chk = js_code[k]
+                if chk.isspace():
+                    k += 1
+                elif chk == "/" and k + 1 < n and js_code[k + 1] == "/":
+                    nl = js_code.find("\n", k)
+                    k = n if nl == -1 else nl + 1
+                elif chk == "/" and k + 1 < n and js_code[k + 1] == "*":
+                    end = js_code.find("*/", k + 2)
+                    k = n if end == -1 else end + 2
+                else:
+                    break
+            if k < n and js_code[k] == ":":
+                out.append(js_code[i:j])  # keep the literal exactly as-is
+            else:
+                value = _js_unescape("".join(raw_chars))
+                out.append('_x("' + _encode(value, key) + '")')
             i = j
             prev = '"'
             continue

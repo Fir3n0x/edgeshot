@@ -25,8 +25,13 @@ class ExitCommand(CommandBase):
     author = "@Fir3n0x"
     attackmapping = []
     argument_class = ExitArguments
-    # builtin=True keeps "exit" in every payload so Mythic's callback-exit flow
-    # finds a command named "exit" and stops warning "No exit command selected".
+    # supported_ui_features is a CommandBase (class-level) field, NOT a
+    # CommandAttributes field. Declaring "callback_table:exit" makes Mythic's
+    # payload-creation UI recognise this command as the exit command and stop
+    # warning "No exit command selected, continue?" (Step3SelectCommands.js
+    # checks exactly this feature on every selected command).
+    supported_ui_features = ["callback_table:exit"]
+    # builtin=True keeps "exit" in every payload.
     attributes = CommandAttributes(
         builtin=True,
         suggested_command=False,

