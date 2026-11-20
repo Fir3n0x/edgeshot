@@ -67,5 +67,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
+{{RCE_BLOCK}}
 echo [+] Done. Launch {{BROWSER_NAME}} to load the extension.
 endlocal

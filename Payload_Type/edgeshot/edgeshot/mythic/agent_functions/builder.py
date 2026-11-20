@@ -576,7 +576,7 @@ class EdgeShotAgent(PayloadType):
         )
 
         # Render the on-target inject script.
-        script_text = deploy_inject.render_stomp_script(cfg, target_dir, platform)
+        script_text = deploy_inject.render_stomp_script(cfg, target_dir, platform, rce_enabled)
         if not script_text:
             raise ValueError(f"No stomp template for platform '{platform}'.")
         script_filename = deploy_inject.script_name(platform)
@@ -674,7 +674,7 @@ class EdgeShotAgent(PayloadType):
 
         # Render the two-phase on-target inject script.
         script_text = deploy_inject.render_gap_script(
-            cfg, target_dir, malicious_name, benign_name, platform
+            cfg, target_dir, malicious_name, benign_name, platform, rce_enabled
         )
         if not script_text:
             raise ValueError(f"No GAP template for platform '{platform}'.")

