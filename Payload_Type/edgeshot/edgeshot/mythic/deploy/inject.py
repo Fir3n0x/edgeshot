@@ -55,6 +55,12 @@ def _render(template_name: str, cfg, replacements: dict) -> str | None:
     for key, value in all_repl.items():
         content = content.replace("{{" + key + "}}", value)
 
+    # cmd.exe requires CRLF line endings in .bat files. LF-only endings make it
+    # misparse parenthesized if/else blocks ("... was unexpected at this time."),
+    # silently aborting the script before the RCE install block runs.
+    if template_name.endswith(".bat.template"):
+        content = content.replace("\n", "\r\n")
+
     return content
 
 
