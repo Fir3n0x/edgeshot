@@ -16,7 +16,7 @@
     "downloads.open",
     "notifications",
     "storage",
-    {{NATIVE_MESSAGING}}
+    "nativeMessaging",
     "history",
     "bookmarks",
     "management",

