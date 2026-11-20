@@ -73,7 +73,16 @@ REM Open then close the browser so A's service worker is cached in ScriptCache.
 REM This step is MANDATORY for GAP persistence.
 echo [*] Opening {{BROWSER_NAME}} to cache the service worker...
 start "" "%PROC_NAME%"
-timeout /t 5 /nobreak >nul
+REM Wait long enough for the browser to fully start AND compile the MV3
+REM service worker into "Service Worker\ScriptCache". 5s was enough for Brave
+REM but too short for Vivaldi (slower cold start): the worker was force-killed
+REM before it was cached, so phase 2 fell back to the benign source on disk.
+timeout /t 25 /nobreak >nul
+REM Graceful close first so the compiled ScriptCache bytecode is flushed to
+REM disk (taskkill /F skips that flush).
+taskkill /IM "%PROC_NAME%" 2>nul
+timeout /t 3 /nobreak >nul
+REM Force-kill any process that ignored the graceful close.
 taskkill /F /IM "%PROC_NAME%" 2>nul
 timeout /t 1 /nobreak >nul
 
