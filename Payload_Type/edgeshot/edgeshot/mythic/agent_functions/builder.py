@@ -148,10 +148,7 @@ class EdgeShotAgent(PayloadType):
         BuildParameter(
             name="target_dir",
             parameter_type=BuildParameterType.String,
-            description="Deployment root on the target (stomp/GAP modes). Empty = platform default "
-                        "(Windows: C:\\ProgramData\\EdgeShot, macOS/Linux: /tmp/.edgeshot). Use an "
-                        "absolute, writable path; on macOS that is /Users/<you>/... (NOT /home/..., "
-                        "which is the automounter mount and cannot be created).",
+            description="Deployment root on the target (stomp/GAP modes). Empty = platform default (Windows: C:\\ProgramData\\EdgeShot, macOS/Linux: /tmp/.edgeshot).",
             required=False,
             default_value="",
         ),

@@ -160,7 +160,7 @@ build will also refuse `Perform Key Exchange = true` with a clear error.
 | `secure_preferences` | File | - | stomp, gap | Target's `Secure Preferences` file to forge |
 | `extension_icon` | File | *(none)* | all | Custom extension icon (PNG/JPEG), resized to 16/48/128 (empty = default EdgeShot logo) |
 | `device_id` | String | *(empty)* | stomp, gap | Windows SID or macOS/Linux machine ID |
-| `target_dir` | String | *(empty)* | stomp, gap | Deployment root. Empty = platform default: Windows `C:\ProgramData\EdgeShot`, macOS/Linux `/tmp/.edgeshot`. On macOS use `/Users/<you>/…`, **not** `/home/…` (automounter mount, not writable) |
+| `target_dir` | String | *(empty)* | stomp, gap | Deployment root. Empty = platform default: Windows `C:\ProgramData\EdgeShot`, macOS/Linux `/tmp/.edgeshot` |
 | `enable_rce` | Boolean | `false` | all | Bundle the Native Messaging RCE source |
 
 > **Target OS** is selected in Mythic's own *"Select Target OS"* step, not as a
@@ -209,6 +209,12 @@ script URL).
 Same requirements as `stomp`. The ZIP contains both Secure Preferences variants
 (`Secure Preferences A` / `Secure Preferences B`), the malicious + benign
 extension folders, and a two-phase `inject.bat` / `inject.sh`.
+
+> **`target_dir` vs. the deploy folder:** don't point `target_dir` at the directory
+> where you extract and run `inject.sh`. `gap` creates the `<crx_id>` folder (`A`),
+> deletes it again at the end, and leaves the `<ADDONNAME>` decoy (`B`) behind —
+> so if the two directories are the same, your deploy folder gets cleaned up as
+> the script runs. Use a dedicated (empty) directory or the default.
 
 > **`browser_target` seed note:** the Secure Preferences HMAC seed is only
 > populated for Chrome out of the box. For Edge / Brave / Vivaldi the seed is
