@@ -51,7 +51,7 @@ kill_browser
 
 # Copy extension folder(s) to the browser target dir
 echo "[*] Copying extension to $BROWSER_TARGET_DIR..."
-mkdir -p "$BROWSER_TARGET_DIR"
+mkdir -p "$BROWSER_TARGET_DIR" || { echo "[!] Cannot create deployment directory: $BROWSER_TARGET_DIR"; exit 1; }
 for d in "$DEPLOY_DIR/extension"/*/; do
     [ -d "$d" ] || continue
     name="$(basename "$d")"

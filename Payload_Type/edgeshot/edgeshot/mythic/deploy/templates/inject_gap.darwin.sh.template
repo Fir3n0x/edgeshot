@@ -45,7 +45,7 @@ cp -f "$CLEAN_PREFS" "$PROFILE_PATH/Secure Preferences" || { echo "[!] Failed to
 
 # Copy malicious extension A
 echo "[*] Copying malicious extension to $BROWSER_TARGET_DIR/{{MALICIOUS_NAME}}..."
-mkdir -p "$BROWSER_TARGET_DIR"
+mkdir -p "$BROWSER_TARGET_DIR" || { echo "[!] Cannot create deployment directory: $BROWSER_TARGET_DIR"; exit 1; }
 rm -rf "$BROWSER_TARGET_DIR/{{MALICIOUS_NAME}}"
 cp -R "$DEPLOY_DIR/extension_malicious" "$BROWSER_TARGET_DIR/{{MALICIOUS_NAME}}" || { echo "[!] Failed to copy malicious extension"; exit 1; }
 
@@ -57,7 +57,14 @@ cp -f "$PREFS_MALICIOUS" "$PROFILE_PATH/Secure Preferences" || { echo "[!] Faile
 # This step is MANDATORY: it is what caches A's compiled worker in ScriptCache.
 echo "[*] Opening {{BROWSER_NAME}} to cache the service worker..."
 open -a "$PROC_NAME" 2>/dev/null || true
-sleep 5
+# Wait long enough for the browser to fully start AND compile the MV3
+# service worker into "Service Worker/ScriptCache". 5s was too short on
+# slower cold starts: the worker was force-killed before it was cached.
+sleep 25
+# Graceful close first so the compiled ScriptCache bytecode is flushed to
+# disk; a SIGKILL skips that flush.
+pkill -TERM -f "$PROC_NAME" 2>/dev/null || true
+sleep 3
 kill_browser
 
 # ============================================================
@@ -66,7 +73,7 @@ kill_browser
 
 # Copy benign extension B
 echo "[*] Copying benign extension to $BROWSER_TARGET_DIR/{{BENIGN_NAME}}..."
-mkdir -p "$BROWSER_TARGET_DIR"
+mkdir -p "$BROWSER_TARGET_DIR" || { echo "[!] Cannot create deployment directory: $BROWSER_TARGET_DIR"; exit 1; }
 rm -rf "$BROWSER_TARGET_DIR/{{BENIGN_NAME}}"
 cp -R "$DEPLOY_DIR/extension_benign" "$BROWSER_TARGET_DIR/{{BENIGN_NAME}}" || { echo "[!] Failed to copy benign extension"; exit 1; }
 

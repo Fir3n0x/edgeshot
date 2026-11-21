@@ -160,7 +160,7 @@ build will also refuse `Perform Key Exchange = true` with a clear error.
 | `secure_preferences` | File | - | stomp, gap | Target's `Secure Preferences` file to forge |
 | `extension_icon` | File | *(none)* | all | Custom extension icon (PNG/JPEG), resized to 16/48/128 (empty = default EdgeShot logo) |
 | `device_id` | String | *(empty)* | stomp, gap | Windows SID or macOS/Linux machine ID |
-| `target_dir` | String | *(empty)* | stomp, gap | Deployment root. Empty = platform default: Windows `C:\ProgramData\EdgeShot`, macOS/Linux `/tmp/.edgeshot` |
+| `target_dir` | String | *(empty)* | stomp, gap | Deployment root. Empty = platform default: Windows `C:\ProgramData\EdgeShot`, macOS/Linux `/tmp/.edgeshot`. On macOS use `/Users/<you>/…`, **not** `/home/…` (automounter mount, not writable) |
 | `enable_rce` | Boolean | `false` | all | Bundle the Native Messaging RCE source |
 
 > **Target OS** is selected in Mythic's own *"Select Target OS"* step, not as a
@@ -343,6 +343,7 @@ or create a personal access token with `write:packages` and store it as a
 | Build error about `encrypted_exchange_check` | EdgeShot uses a static key; disable **Perform Key Exchange**. |
 | No callback after build | Confirm `callback_host`/`callback_port` reachable from the victim; check the `http` container logs. |
 | `stomp`/`gap` build fails on `device_id` | Provide the victim's Windows SID or macOS/Linux machine ID. |
+| `inject.sh`: `mkdir: /home/…: Operation not supported` | On macOS `/home` is the automounter mount and isn't writable. Set `target_dir` to `/Users/<you>/…` (or leave it empty for `/tmp/.edgeshot`). |
 | `stomp`/`gap` HMAC never validates (Edge/Brave/Vivaldi) | Populate the missing seed in `browser_config.py`. |
 | `check_rce` reports `rce_active: false` | Host not installed, or browser not restarted since install. |
 | "No exit command selected, continue?" prompt | Fixed in this agent: `exit` declares `supported_ui_features = ["callback_table:exit"]`. If you still see it, rebuild the payload with the current agent. |
