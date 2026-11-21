@@ -1,11 +1,11 @@
 """
-manifest.py — CRX3 public-key extraction and extension-ID derivation.
+manifest.py: CRX3 public-key extraction and extension-ID derivation.
 
 Ported from the stomp / GAP tools. Downloads a whitelisted extension's CRX3
 from the browser store, extracts its RSA public key (SubjectPublicKeyInfo DER),
 derives the extension ID, so a GPO allow-list ID can be spoofed.
 
-Stdlib only (base64 / hashlib / struct / urllib / zipfile) — no cryptography.
+Stdlib only (base64 / hashlib / struct / urllib / zipfile), no cryptography.
 """
 
 import base64

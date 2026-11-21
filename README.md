@@ -33,31 +33,32 @@ The agent is a single `background.js` service worker (~2,000 lines) that:
   using the native Mythic message format (`AES-256-CBC` + `HMAC-SHA256`,
   `mythic_encrypts = true`);
 - schedules its own tasking via `chrome.alarms` (~6-second cadence);
-- offers **29 commands** covering browser recon, file access, passive collection
-  (keylogger, clipboard, cookies, LLM conversations), notification lures,
-  declarativeNetRequest proxying, and an **optional native-messaging RCE** module.
+- offers **30 commands** covering browser recon, in-page JavaScript injection,
+  file access, passive collection (keylogger, clipboard, cookies, LLM
+  conversations), notification lures, declarativeNetRequest proxying, and an
+  **optional native-messaging RCE** module.
 
-It ships with **three deployment modes** — `zip` (plain packaged extension),
+It ships with **three deployment modes**: `zip` (plain packaged extension),
 `stomp` (forge the target browser's *Secure Preferences* to auto-load an unpacked
-extension), and `gap` (a two-phase, ghost-anchor persistence variant) — for
+extension), and `gap` (a two-phase, ghost-anchor persistence variant), for
 Chromium-family browsers on Windows, macOS and Linux.
 
 ## Features
 
-- **Native Mythic integration** — installs with `mythic-cli install github …`,
+- **Native Mythic integration**: installs with `mythic-cli install github ...`,
   builds a ZIP payload from the UI, and reports callbacks like any other agent.
-- **Single-endpoint C2** — one `GET` (tasking) and one `POST` (checkin +
+- **Single-endpoint C2**: one `GET` (tasking) and one `POST` (checkin +
   responses), body encrypted in the standard Mythic format.
-- **29 commands** (see [Commands](#commands)).
-- **3 deployment modes** — `zip`, `stomp`, `gap`.
-- **4 target browsers** — Chrome, Edge, Brave, Vivaldi.
-- **Cross-platform** — the target OS step drives deployment paths and injection
+- **30 commands** (see [Commands](#commands)).
+- **3 deployment modes**: `zip`, `stomp`, `gap`.
+- **4 target browsers**: Chrome, Edge, Brave, Vivaldi.
+- **Cross-platform**: the target OS step drives deployment paths and injection
   scripts for Windows, macOS and Linux.
 - **Optional static string obfuscation** of `background.js` at build time
-  (XOR string-literal encoding, CSP-safe — no `eval`).
+  (XOR string-literal encoding, CSP-safe, no `eval`).
 - **Optional native RCE** via a Native Messaging host (`com.site.agent`),
   compiled from the bundled source and dropped at deployment.
-- **Passive collection buffer** — keylogs, clipboard, cookies, LLM activity,
+- **Passive collection buffer**: keylogs, clipboard, cookies, LLM activity,
   browsing events and downloads are buffered in `chrome.storage.local` and
   flushed on demand with `get_buffer`.
 
@@ -71,7 +72,7 @@ Chromium-family browsers on Windows, macOS and Linux.
 | Docker | recent | builds the agent container locally |
 | Target browser | Chromium-family | Chrome / Edge / Brave / Vivaldi (MV3) |
 
-> The agent **requires** the standard `http` profile — no custom C2 profile is
+> The agent **requires** the standard `http` profile; no custom C2 profile is
 > included. For the `stomp`/`gap` modes with a *random* extension ID, the build
 > container also installs the `cryptography` Python package (already handled by
 > the bundled `Dockerfile`).
@@ -100,18 +101,18 @@ That stops all containers, rebuilds, and starts everything including the newly
 installed agent. You can now create a new payload of type **EdgeShot**.
 
 > **Branch/tag:** append `-b <branch>` to the install command to pin a specific
-> branch, or `sudo ./mythic-cli install github … -b v1.0.0` for a tag.
+> branch, or `sudo ./mythic-cli install github ... -b v1.0.0` for a tag.
 
 ## Quick start
 
 1. **Configure the `http` profile** (one-time):
-   - UI → *C2 Profiles* → your `http` instance.
+   - UI -> *C2 Profiles* -> your `http` instance.
    - Set `callback_host` / `callback_port` to your redirector or Mythic server.
    - Set **Encryption Type (`AESPSK`)** to **`aes256_hmac`**.
    - Set **Perform Key Exchange** (`encrypted_exchange_check`) to **`false`**.
    - Save.
 
-2. **Create the payload**: UI → *Payloads* → *Create* → type **EdgeShot**.
+2. **Create the payload**: UI -> *Payloads* -> *Create* -> type **EdgeShot**.
 
 3. **Pick the target OS** (Windows / macOS / Linux) in the OS step. This drives
    the deployment paths and injection scripts (there is no separate `platform`
@@ -135,14 +136,14 @@ is a plain transport. **Only four profile options matter**:
 |--------|-------|-------|
 | `callback_host` | your C2 host | with or without `http(s)://` |
 | `callback_port` | your C2 port | e.g. `80`, `443`, `8080` |
-| **Encryption Type (`AESPSK`)** | **`aes256_hmac`** | mandatory — provides the AES-256 key |
+| **Encryption Type (`AESPSK`)** | **`aes256_hmac`** | mandatory; provides the AES-256 key |
 | **Perform Key Exchange** | **`false`** | EdgeShot uses a static key, not the ECDH handshake |
 
-All other `http` options (`sleep`, `jitter`, headers, kill date, proxy, …) are
+All other `http` options (`sleep`, `jitter`, headers, kill date, proxy, ...) are
 **ignored**: the agent schedules its own callbacks via `chrome.alarms`.
 
 If the build fails with *"No AES key was generated"*, re-check the Encryption
-Type — editing/recreating the profile resets it to its default (`none`). The
+Type: editing/recreating the profile resets it to its default (`none`). The
 build will also refuse `Perform Key Exchange = true` with a clear error.
 
 ## Build parameters
@@ -156,7 +157,7 @@ build will also refuse `Perform Key Exchange = true` with a clear error.
 | `deployment_mode` | ChooseOne | `zip` | all | `zip` / `stomp` / `gap` |
 | `browser_target` | ChooseOne | `chrome` | stomp, gap | `chrome` / `edge` / `brave` / `vivaldi` |
 | `spoof_id` | String | *(empty)* | stomp, gap | Extension ID to spoof (empty = random ID) |
-| `secure_preferences` | File | — | stomp, gap | Target's `Secure Preferences` file to forge |
+| `secure_preferences` | File | - | stomp, gap | Target's `Secure Preferences` file to forge |
 | `extension_icon` | File | *(none)* | all | Custom extension icon (PNG/JPEG), resized to 16/48/128 (empty = default EdgeShot logo) |
 | `device_id` | String | *(empty)* | stomp, gap | Windows SID or macOS/Linux machine ID |
 | `target_dir` | String | *(empty)* | stomp, gap | Deployment root. Empty = platform default: Windows `C:\ProgramData\EdgeShot`, macOS/Linux `/tmp/.edgeshot` |
@@ -167,7 +168,7 @@ build will also refuse `Perform Key Exchange = true` with a clear error.
 > for deployment paths and the injection script.
 >
 > **Default OS note:** the *"Select Target OS"* step defaults to the first OS in
-> an alphabetical list, which is `Linux` — this is hard-coded in Mythic's
+> an alphabetical list, which is `Linux`; this is hard-coded in Mythic's
 > frontend (`Step1SelectOS.js` sorts the OS list), not something an agent can
 > override. The operator must explicitly select **Windows** (or macOS) on that
 > step; the choice is then respected everywhere (paths, inject script, HMAC seed
@@ -175,14 +176,14 @@ build will also refuse `Perform Key Exchange = true` with a clear error.
 
 ## Deployment modes
 
-### `zip` — plain packaged extension
+### `zip`: plain packaged extension
 
 Produces a standard MV3 extension ZIP (`manifest.json` + `background.js` +
 `icons/`, plus the RCE source if `enable_rce` is set). Install it via Developer
-Mode → *Load unpacked* (after unzipping), or side-load it through your browser's
+Mode -> *Load unpacked* (after unzipping), or side-load it through your browser's
 policy.
 
-### `stomp` — Secure Preferences forging
+### `stomp`: Secure Preferences forging
 
 For an unpacked extension to auto-load, Chromium checks the **Secure Preferences**
 HMAC. `stomp` takes the victim's original `Secure Preferences` file and forges a
@@ -194,7 +195,7 @@ ID). The produced ZIP contains `SecurePreferencesClean` (the original), the
 patched `Secure Preferences`, the extension under `extension/<crx_id>/`, and an
 `inject.bat` / `inject.sh` that performs the drop.
 
-### `gap` — ghost-anchor persistence
+### `gap`: ghost-anchor persistence
 
 A two-phase persistence variant. The malicious extension (`A`) and a benign decoy
 (`B`, *"Google Docs Offline"*) share the **same extension ID**. Phase 1 loads `A`
@@ -221,23 +222,35 @@ extension folders, and a two-phase `inject.bat` / `inject.sh`.
 
 | Command | Params | Description |
 |---------|--------|-------------|
-| `heartbeat` | — | Check that the extension is alive and return its status. *(builtin)* |
-| `exit` | — | Exit the agent: uninstall the extension (same as `kill`). *(builtin)* |
-| `kill` | — | Uninstall the extension from the browser (self-removal). |
-| `get_status` | — | Return the extension identity and browser environment. |
-| `get_capabilities` | — | Return the list of commands this agent supports. |
+| `heartbeat` | - | Check that the extension is alive and return its status. *(builtin)* |
+| `exit` | - | Exit the agent: uninstall the extension (same as `kill`). *(builtin)* |
+| `kill` | - | Uninstall the extension from the browser (self-removal). |
+| `get_status` | - | Return the extension identity and browser environment. |
+| `get_capabilities` | - | Return the list of commands this agent supports. |
 
 ### Browser reconnaissance
 
 | Command | Params | Description |
 |---------|--------|-------------|
-| `get_active_tab` | — | Return the URL and title of the active tab. |
-| `get_tabs` | — | List all open tabs across all windows. |
-| `get_screenshot` | — | Capture a screenshot of the active tab (returned as a file). |
+| `get_active_tab` | - | Return the URL and title of the active tab. |
+| `get_tabs` | - | List all open tabs across all windows. |
+| `get_screenshot` | - | Capture a screenshot of the active tab (returned as a file). |
 | `get_dom` | `tab_id` | Return the DOM (`outerHTML`) of a tab (defaults to active). |
 | `get_history` | `max_results` | Return the browser's browsing history. |
-| `get_bookmarks` | — | Return the browser's bookmark tree. |
-| `network_recon` | — | Local IPs (WebRTC STUN), public IP, ISP, VPN detection. |
+| `get_bookmarks` | - | Return the browser's bookmark tree. |
+| `network_recon` | - | Local IPs (WebRTC STUN), public IP, ISP, VPN detection. |
+
+### JavaScript injection
+
+| Command | Params | Description |
+|---------|--------|-------------|
+| `inject_js` | `tab_id`, `code` | Inject JavaScript into a tab, executed in the page's own context (bypasses the isolated-world sandbox). Defaults to the active tab. |
+
+> **Note:** `inject_js` appends a `<script>` element to the page, so the code runs
+> in the page's real JS context, it can reach page globals, `localStorage` and
+> in-memory tokens that the isolated world cannot. It is subject to the page's
+> Content Security Policy (inline scripts are blocked on sites with a strict
+> `script-src`). An optional `<script>...</script>` wrapper is stripped automatically.
 
 ### File operations
 
@@ -251,9 +264,9 @@ extension folders, and a two-phase `inject.bat` / `inject.sh`.
 
 | Command | Params | Description |
 |---------|--------|-------------|
-| `get_buffer` | — | Flush everything buffered locally: keylogs, clipboard, cookies, LLM conversations, activity, downloads. |
-| `start_keylogger` | — | Start recording keystrokes on the focused tab. |
-| `stop_keylogger` | — | Stop recording and flush into the local keylog store. |
+| `get_buffer` | - | Flush everything buffered locally: keylogs, clipboard, cookies, LLM conversations, activity, downloads. |
+| `start_keylogger` | - | Start recording keystrokes on the focused tab. |
+| `stop_keylogger` | - | Stop recording and flush into the local keylog store. |
 
 ### Interaction & notification lures
 
@@ -261,9 +274,9 @@ extension folders, and a two-phase `inject.bat` / `inject.sh`.
 |---------|--------|-------------|
 | `alert` | `message` | Show an `alert()` dialog on the active tab. |
 | `open_tab` | `url` | Open a URL in a new background tab. |
-| `get_notification` | — | Return the current notification lure configuration. |
+| `get_notification` | - | Return the current notification lure configuration. |
 | `set_notification` | `type`, `title`, `message` | Configure the notification lure used by `send_notification`. |
-| `send_notification` | — | Show the configured notification lure. |
+| `send_notification` | - | Show the configured notification lure. |
 | `send_notification_v2` | `title`, `message`, `type`, `click_url`, `image_url`, `buttons`, `require_interaction` | Show a full-featured notification lure. |
 
 ### Proxy (declarativeNetRequest)
@@ -271,14 +284,14 @@ extension folders, and a two-phase `inject.bat` / `inject.sh`.
 | Command | Params | Description |
 |---------|--------|-------------|
 | `proxy_set_rules` | `block_rules`, `redirect_rules` | Define block/redirect DNR rules. |
-| `enable_proxy` | — | Activate the DNR rules set via `proxy_set_rules`. |
-| `disable_proxy` | — | Clear all DNR rules. |
+| `enable_proxy` | - | Activate the DNR rules set via `proxy_set_rules`. |
+| `disable_proxy` | - | Clear all DNR rules. |
 
 ### Native RCE (only when built with `enable_rce = true`)
 
 | Command | Params | Description |
 |---------|--------|-------------|
-| `check_rce` | — | Ping the Native Messaging host to confirm RCE availability. |
+| `check_rce` | - | Ping the Native Messaging host to confirm RCE availability. |
 | `execute_cmd` | `command` | Execute a shell command on the victim via the host. |
 
 ## Native RCE module (optional)
@@ -286,7 +299,7 @@ extension folders, and a two-phase `inject.bat` / `inject.sh`.
 When the payload is built with `enable_rce = true`, the manifest requests the
 `nativeMessaging` permission and the build bundles the host **source** under
 `rce/`. The container does **not** compile it (no Windows cross-compiler in the
-Mythic base image) — you compile it once locally and drop it with `execute_file`.
+Mythic base image); you compile it once locally and drop it with `execute_file`.
 
 ```bash
 # Edge target
@@ -298,7 +311,7 @@ x86_64-w64-mingw32-gcc -O2 -s -static -mwindows -DBROWSER=chrome -o update.exe n
 The binary is **dual-mode**: on first run it installs itself
 (`%LOCALAPPDATA%\Config\update.exe` + a `manifest.json` + an `HKCU` registry
 key), then exits. Restart the browser so it discovers the host, then
-`check_rce` → `execute_cmd whoami`. Full details in
+`check_rce` -> `execute_cmd whoami`. Full details in
 [`rce/README.md`](Payload_Type/edgeshot/edgeshot/mythic/agent_code/rce/README.md).
 
 ## Docker image (GHCR)
@@ -312,13 +325,13 @@ that builds the agent image and publishes it to
 docker pull ghcr.io/<your-github-username>/edgeshot:latest
 ```
 
-Note that the **normal install path is `mythic-cli install github …`** — Mythic
+Note that the **normal install path is `mythic-cli install github ...`**; Mythic
 builds the container locally from the bundled `Dockerfile` so it always matches
 your server's `mythic_container` version. The GHCR image is a convenience
 artifact for inspection and offline use.
 
 To enable publishing, give the `GITHUB_TOKEN` of the repo **write** access to
-packages (Settings → Actions → General → *Workflow permissions* → read and write),
+packages (Settings -> Actions -> General -> *Workflow permissions* -> read and write),
 or create a personal access token with `write:packages` and store it as a
 `GHCR_TOKEN` secret.
 
@@ -326,14 +339,14 @@ or create a personal access token with `write:packages` and store it as a
 
 | Symptom | Fix |
 |---------|-----|
-| Build error: *"No AES key was generated"* | C2 Profiles → `http` → set **Encryption Type** to `aes256_hmac` (not `none`), disable Perform Key Exchange, Save, rebuild. |
+| Build error: *"No AES key was generated"* | C2 Profiles -> `http` -> set **Encryption Type** to `aes256_hmac` (not `none`), disable Perform Key Exchange, Save, rebuild. |
 | Build error about `encrypted_exchange_check` | EdgeShot uses a static key; disable **Perform Key Exchange**. |
 | No callback after build | Confirm `callback_host`/`callback_port` reachable from the victim; check the `http` container logs. |
 | `stomp`/`gap` build fails on `device_id` | Provide the victim's Windows SID or macOS/Linux machine ID. |
 | `stomp`/`gap` HMAC never validates (Edge/Brave/Vivaldi) | Populate the missing seed in `browser_config.py`. |
 | `check_rce` reports `rce_active: false` | Host not installed, or browser not restarted since install. |
 | "No exit command selected, continue?" prompt | Fixed in this agent: `exit` declares `supported_ui_features = ["callback_table:exit"]`. If you still see it, rebuild the payload with the current agent. |
-| Extension fails to load: *"Service worker registration failed. Status code: 15"* / *"Uncaught SyntaxError: Unexpected string"* | The service worker failed to parse. Rebuild with the current agent (the obfuscator no longer rewrites object-literal keys into invalid `_x("…")` property syntax). |
+| Extension fails to load: *"Service worker registration failed. Status code: 15"* / *"Uncaught SyntaxError: Unexpected string"* | The service worker failed to parse. Rebuild with the current agent (the obfuscator no longer rewrites object-literal keys into invalid `_x("...")` property syntax). |
 | Extension icon missing / blank in the browser | The manifest now declares `icons` (16/48/128). Rebuild; supply a custom `extension_icon` (PNG/JPEG) if you want your own art. |
 
 ## Repository structure
@@ -346,7 +359,7 @@ or create a personal access token with `write:packages` and store it as a
 ├── agent_icons/                 # logo + SVG icon shown in the Mythic UI
 │   ├── edgeshot.svg             # SVG icon with the logo embedded (base64)
 │   └── edgeshot.png             # canonical logo (raster)
-├── C2_Profiles/                 # (empty — uses the built-in http profile)
+├── C2_Profiles/                 # (empty, uses the built-in http profile)
 ├── documentation-payload/       # in-UI documentation (Hugo)
 │   └── edgeshot/
 ├── documentation-c2/            # (empty)

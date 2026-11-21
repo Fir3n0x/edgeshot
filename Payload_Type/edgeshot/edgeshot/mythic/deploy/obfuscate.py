@@ -189,7 +189,7 @@ def obfuscate_js(js_code, key=XOR_KEY):
             # ({"host": handler}), a switch case label (case "x":) or a ternary
             # branch (cond ? "a" : "b"). Rewriting an object KEY into `_x("...")`
             # is invalid property syntax (V8: "Unexpected string"), so leave such
-            # literals untouched. Obfuscating keys buys nothing anyway — they are
+            # literals untouched. Obfuscating keys buys nothing anyway: they are
             # structural, not secret string *values*.
             k = j
             while k < n:

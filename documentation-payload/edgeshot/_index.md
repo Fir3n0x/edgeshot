@@ -14,7 +14,7 @@ reports callbacks through the standard `http` C2 profile.
 The agent is a single `background.js` service worker (~2,000 lines) that encrypts
 its own traffic in the native Mythic format (`AES-256-CBC` + `HMAC-SHA256`,
 `mythic_encrypts = true`), schedules tasking via `chrome.alarms` (~6 seconds), and
-exposes **29 commands**. Three deployment modes are supported: `zip` (plain
+exposes **30 commands**. Three deployment modes are supported: `zip` (plain
 packaged extension), `stomp` (forge the browser's *Secure Preferences* to
 auto-load the extension) and `gap` (two-phase ghost-anchor persistence).
 
@@ -40,21 +40,21 @@ HMAC)`.
 
 ## OPSEC
 
-- **Single endpoint** — tasking and exfiltration share one URI; no separate exfil
+- **Single endpoint**: tasking and exfiltration share one URI; no separate exfil
   routes.
-- **Encrypted traffic** — the agent encrypts its own messages; the `http` profile
+- **Encrypted traffic**: the agent encrypts its own messages; the `http` profile
   is a plain transport.
-- **No ECDH key exchange** — a static AES key is baked at build time; keep
+- **No ECDH key exchange**: a static AES key is baked at build time; keep
   *Perform Key Exchange* **off** or the checkin will not match.
-- **Static string obfuscation (optional)** — the `obfuscate` build parameter
+- **Static string obfuscation (optional)**: the `obfuscate` build parameter
   XOR-encodes string literals in `background.js` to reduce static string IOCs.
   It is CSP-safe (no `eval`/`new Function`) but does **not** rename identifiers
   or flatten control flow.
-- **`content.js` is empty** — for GAP compatibility, all content-script logic is
+- **`content.js` is empty**: for GAP compatibility, all content-script logic is
   inlined into `background.js`.
-- **Callback cadence** — a fixed ~6-second `chrome.alarms` schedule; the `http`
+- **Callback cadence**: a fixed ~6-second `chrome.alarms` schedule; the `http`
   profile's `sleep`/`jitter` are **ignored**, so beaconing analytics are uniform.
-- **Passive collection is buffered** — keylogs/clipboard/cookies/LLM activity are
+- **Passive collection is buffered**: keylogs/clipboard/cookies/LLM activity are
   held in `chrome.storage.local` and drained with `get_buffer` rather than
   streamed immediately.
 
@@ -66,6 +66,9 @@ HMAC)`.
 ### Browser reconnaissance
 `get_active_tab`, `get_tabs`, `get_screenshot`, `get_dom`, `get_history`,
 `get_bookmarks`, `network_recon`
+
+### JavaScript injection
+`inject_js`
 
 ### File operations
 `get_file`, `upload_file`, `execute_file`

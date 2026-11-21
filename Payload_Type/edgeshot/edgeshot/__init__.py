@@ -10,6 +10,7 @@ from edgeshot.mythic.agent_functions.alert import *
 from edgeshot.mythic.agent_functions.open_tab import *
 from edgeshot.mythic.agent_functions.get_screenshot import *
 from edgeshot.mythic.agent_functions.get_dom import *
+from edgeshot.mythic.agent_functions.inject_js import *
 from edgeshot.mythic.agent_functions.get_history import *
 from edgeshot.mythic.agent_functions.get_bookmarks import *
 from edgeshot.mythic.agent_functions.upload_file import *

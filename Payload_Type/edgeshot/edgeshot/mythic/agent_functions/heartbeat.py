@@ -1,5 +1,5 @@
 # ============================================================================
-# heartbeat — minimal builtin command.
+# heartbeat: minimal builtin command.
 #
 # CANONICAL PATTERN for every EdgeShot command (milestone 2):
 #   - a <Cmd>Arguments(TaskArguments) class that initializes self._args
