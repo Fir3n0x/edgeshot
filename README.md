@@ -322,7 +322,7 @@ that builds the agent image and publishes it to
 **GitHub Container Registry** on every push to the default branch and every tag.
 
 ```bash
-docker pull ghcr.io/<your-github-username>/edgeshot:latest
+docker pull ghcr.io/fir3n0x/edgeshot:latest
 ```
 
 Note that the **normal install path is `mythic-cli install github ...`**; Mythic
